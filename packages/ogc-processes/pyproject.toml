@@ -1,0 +1,14 @@
+[build-system]
+requires = ["uv_build>=0.9.8,<0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "ogc-processes"
+version = "0.1.0"
+description = "Reusable OGC API - Processes protocol layer"
+requires-python = ">=3.12"
+dependencies = ["fastapi>=0.115.0", "pydantic>=2.10.0"]
+
+[dependency-groups]
+dev = ["mypy>=1.13.0", "pytest>=8.3.0", "httpx>=0.28.0", "ruff>=0.8.0"]
+
