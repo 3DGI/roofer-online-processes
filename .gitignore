@@ -14,4 +14,4 @@ build/
 .env.*
 !.env.example
 .dagster/
-
+.idea
