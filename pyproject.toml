@@ -1,0 +1,16 @@
+[tool.uv.workspace]
+members = ["packages/ogc-processes", "apps/api"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/ogc-processes/tests", "apps/api/tests"]
+
