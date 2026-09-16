@@ -23,9 +23,29 @@ def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links
     specification = client.get("/ogcapi/openapi.json")
 
     assert landing.status_code == 200
-    assert any(link["rel"] == "service-desc" for link in landing.json()["links"])
-    assert "/processes" in specification.json()["paths"]
-    assert "/ogcapi/processes" not in specification.json()["paths"]
+    service_desc = next(
+        link for link in landing.json()["links"] if link["rel"] == "service-desc"
+    )
+    assert service_desc["type"] == "application/vnd.oai.openapi+json;version=3.0"
+    document = specification.json()
+    assert document["openapi"] == "3.0.3"
+    assert "/processes" in document["paths"]
+    assert "/ogcapi/processes" not in document["paths"]
+
+    outputs_parameter = next(
+        parameter
+        for parameter in document["paths"]["/jobs/{job_id}/results"]["get"][
+            "parameters"
+        ]
+        if parameter["name"] == "outputs"
+    )
+    assert outputs_parameter["schema"] == {
+        "type": "array",
+        "items": {"type": "string"},
+        "title": "Outputs",
+    }
+    assert outputs_parameter["style"] == "form"
+    assert outputs_parameter["explode"] is False
 
 
 def test_async_execution_returns_job_location() -> None:

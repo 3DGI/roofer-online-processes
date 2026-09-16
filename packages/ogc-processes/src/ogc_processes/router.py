@@ -1,7 +1,7 @@
 """Mountable OGC API - Processes Part 1 version 2 application."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Request, status
@@ -45,6 +45,42 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
+def _normalize_openapi_30(node: Any) -> None:
+    """Rewrite Pydantic's OpenAPI 3.1 constructs for OpenAPI 3.0 clients."""
+    if isinstance(node, dict):
+        if "const" in node:
+            node["enum"] = [node.pop("const")]
+        any_of = node.get("anyOf")
+        if isinstance(any_of, list) and len(any_of) == 2:
+            nullable = next(
+                (
+                    item
+                    for item in any_of
+                    if isinstance(item, dict) and item.get("type") == "null"
+                ),
+                None,
+            )
+            non_null = next(
+                (
+                    item
+                    for item in any_of
+                    if isinstance(item, dict) and item.get("type") != "null"
+                ),
+                None,
+            )
+            if nullable is not None and non_null is not None:
+                outer = {key: value for key, value in node.items() if key != "anyOf"}
+                node.clear()
+                node.update(non_null)
+                node.update(outer)
+                node["nullable"] = True
+        for value in node.values():
+            _normalize_openapi_30(value)
+    elif isinstance(node, list):
+        for value in node:
+            _normalize_openapi_30(value)
+
+
 def create_app(
     *,
     catalog: ProcessCatalog,
@@ -59,6 +95,33 @@ def create_app(
         docs_url=None,
         redoc_url=None,
     )
+    app.openapi_version = "3.0.3"
+    native_openapi = app.openapi
+
+    def openapi_30() -> dict[str, Any]:
+        schema = native_openapi()
+        _normalize_openapi_30(schema)
+        for path_item in schema.get("paths", {}).values():
+            if not isinstance(path_item, dict):
+                continue
+            for operation in path_item.values():
+                if not isinstance(operation, dict):
+                    continue
+                for parameter in operation.get("parameters", []):
+                    if not isinstance(parameter, dict):
+                        continue
+                    if parameter.get("name") != "outputs":
+                        continue
+                    parameter_schema = parameter.get("schema")
+                    if not isinstance(parameter_schema, dict):
+                        continue
+                    for key in ("style", "explode"):
+                        if key in parameter_schema:
+                            parameter[key] = parameter_schema.pop(key)
+                    parameter_schema.pop("nullable", None)
+        return schema
+
+    app.openapi = openapi_30  # type: ignore[method-assign]
 
     @app.exception_handler(StarletteHTTPException)
     async def http_problem(
@@ -128,7 +191,7 @@ def create_app(
                 Link(
                     href=f"{root}/openapi.json",
                     rel="service-desc",
-                    type="application/vnd.oai.openapi+json;version=3.1",
+                    type="application/vnd.oai.openapi+json;version=3.0",
                 ),
                 Link(
                     href=f"{root}/conformance",
@@ -154,10 +217,12 @@ def create_app(
         )
 
     @app.get("/processes", response_model=ProcessList, responses=PROBLEM_RESPONSES)
-    def list_processes(request: Request) -> ProcessList:
+    def list_processes(
+        request: Request, limit: Annotated[int, Query(ge=1, le=1000)] = 10
+    ) -> ProcessList:
         root = root_url(request)
         return ProcessList(
-            processes=catalog.list_processes(),
+            processes=catalog.list_processes()[:limit],
             links=[Link(href=f"{root}/processes", rel="self", type="application/json")],
         )
 
@@ -199,6 +264,7 @@ def create_app(
         job = JobStatus(
             id=job_id,
             processID=process_id,
+            processingEntityType="ogc-api-processes",
             status=submission.status,
             message=submission.message,
             created=now,
@@ -229,15 +295,15 @@ def create_app(
     @app.get("/jobs", response_model=JobList, responses=PROBLEM_RESPONSES)
     def list_jobs(
         request: Request,
-        type: str | None = None,
-        processID: str | None = None,
-        status: StatusCode | None = None,
-        datetime_: str | None = Query(default=None, alias="datetime"),
-        minDuration: float | None = Query(default=None, ge=0),
-        maxDuration: float | None = Query(default=None, ge=0),
-        limit: int = Query(default=10, ge=1, le=1000),
+        type: Annotated[list[str] | None, Query()] = None,
+        processID: Annotated[list[str] | None, Query()] = None,
+        status: Annotated[list[StatusCode] | None, Query()] = None,
+        datetime_: Annotated[str | None, Query(alias="datetime")] = None,
+        minDuration: Annotated[int | None, Query(ge=0)] = None,
+        maxDuration: Annotated[int | None, Query(ge=0)] = None,
+        limit: Annotated[int, Query(ge=1, le=1000)] = 10,
     ) -> JobList:
-        if type is not None and type != "ogc-api-processes":
+        if type is not None and any(item != "ogc-api-processes" for item in type):
             raise HTTPException(
                 status_code=400, detail="Unsupported processing entity type."
             )
@@ -271,7 +337,9 @@ def create_app(
         "/jobs/{job_id}/results", response_model=Results, responses=PROBLEM_RESPONSES
     )
     def get_results(
-        request: Request, job_id: str, outputs: str | None = None
+        request: Request,
+        job_id: str,
+        outputs: Annotated[list[str] | None, Query(style="form", explode=False)] = None,
     ) -> Results:
         owner = subject(request)
         job = completed_job(request, job_id, owner)
@@ -323,7 +391,11 @@ def problem_response(request: Request, status_code: int, detail: str) -> JSONRes
         status_code, "Error"
     )
     report = ExceptionReport(
-        title=title, status=status_code, detail=detail, instance=str(request.url)
+        type="about:blank",
+        title=title,
+        status=status_code,
+        detail=detail,
+        instance=str(request.url),
     )
     return JSONResponse(
         status_code=status_code,
@@ -339,11 +411,13 @@ def execution_mode(prefer: str | None) -> JobControlOption:
     return JobControlOption.execute_async
 
 
-def select_outputs(results: Results, requested: str | None) -> Results:
+def select_outputs(results: Results, requested: list[str] | None) -> Results:
     """Validate and select comma-separated output identifiers."""
     if requested is None:
         return Results(outputs=results.outputs.copy())
-    output_ids = [output_id for output_id in requested.split(",") if output_id]
+    output_ids = [
+        output_id for value in requested for output_id in value.split(",") if output_id
+    ]
     if not output_ids or any(
         output_id not in results.outputs for output_id in output_ids
     ):
@@ -357,18 +431,18 @@ def select_outputs(results: Results, requested: str | None) -> Results:
 
 def filter_jobs(
     jobs: list[JobStatus],
-    process_id: str | None,
-    job_status: StatusCode | None,
+    process_id: list[str] | None,
+    job_status: list[StatusCode] | None,
     datetime_filter: str | None,
-    minimum: float | None,
-    maximum: float | None,
+    minimum: int | None,
+    maximum: int | None,
 ) -> list[JobStatus]:
     """Apply the Job List filters supported by the reference store."""
     filtered = [
-        job for job in jobs if process_id is None or job.processID == process_id
+        job for job in jobs if process_id is None or job.processID in process_id
     ]
     filtered = [
-        job for job in filtered if job_status is None or job.status == job_status
+        job for job in filtered if job_status is None or job.status in job_status
     ]
     if datetime_filter is not None:
         filtered = [job for job in filtered if datetime_matches(job, datetime_filter)]
@@ -400,9 +474,7 @@ def parse_datetime(value: str) -> datetime | None:
         return None
 
 
-def duration_matches(
-    job: JobStatus, minimum: float | None, maximum: float | None
-) -> bool:
+def duration_matches(job: JobStatus, minimum: int | None, maximum: int | None) -> bool:
     """Match elapsed job duration bounds in seconds."""
     if job.started is None or job.finished is None:
         return False
