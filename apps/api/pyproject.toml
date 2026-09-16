@@ -10,10 +10,9 @@ requires-python = ">=3.12"
 dependencies = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0", "ogc-processes"]
 
 [dependency-groups]
-dev = ["httpx>=0.28.0", "pytest>=8.3.0", "mypy>=1.13.0", "ruff>=0.8.0"]
+dev = ["anyio>=4.0,<4.15", "httpx2>=2.13.0", "pytest>=8.3.0", "mypy>=1.13.0", "ruff>=0.8.0"]
 
 [tool.uv.sources]
 ogc-processes = { workspace = true }
 [tool.uv.build-backend]
 module-name = "api"
-
