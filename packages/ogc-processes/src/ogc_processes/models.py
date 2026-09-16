@@ -1,8 +1,8 @@
-"""OGC API - Processes Part 1: Core resource models."""
+"""OGC API - Processes Part 1 version 2 resource models."""
 
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,7 @@ class TransmissionMode(str, Enum):
 class ResponseType(str, Enum):
     """Requested response document format."""
 
-    json = "document"
+    document = "document"
     raw = "raw"
 
 
@@ -35,7 +35,6 @@ class StatusCode(str, Enum):
     running = "running"
     successful = "successful"
     failed = "failed"
-    dismissed = "dismissed"
 
 
 class Link(BaseModel):
@@ -111,19 +110,19 @@ class ProcessList(BaseModel):
 
 
 class ExecuteRequest(BaseModel):
-    """Execution request accepted by the core endpoint."""
+    """Execution request accepted by the Core endpoint."""
 
     inputs: dict[str, Any] = Field(default_factory=dict)
     response: ResponseType | None = None
-    mode: JobControlOption | None = None
-    subscription: dict[str, Any] | None = None
+    subscriber: dict[str, Any] | None = None
 
 
 class JobStatus(BaseModel):
-    """OGC job status resource."""
+    """OGC API Processes 2.0 job resource."""
 
-    jobID: str
+    id: str
     processID: str
+    processingEntityType: Literal["ogc-api-processes"] = "ogc-api-processes"
     status: StatusCode
     message: str | None = None
     created: datetime
@@ -149,10 +148,10 @@ class Results(BaseModel):
 
 
 class ExceptionReport(BaseModel):
-    """RFC 7807-compatible exception response."""
+    """RFC 7807 problem details response."""
 
-    type: str
+    type: str = "about:blank"
     title: str
+    status: int
     detail: str | None = None
-    status: int | None = None
     instance: str | None = None

@@ -1,7 +1,7 @@
 """Reference FastAPI service for the reusable OGC protocol layer."""
 
 from fastapi import FastAPI
-from ogc_processes.router import create_router
+from ogc_processes.router import create_app
 
 from api.reference_backend import (
     ReferenceAuthenticator,
@@ -14,15 +14,15 @@ catalog = ReferenceCatalog()
 backend = ReferenceBackend()
 store = ReferenceJobStore()
 
-app = FastAPI(title="Roofer Online OGC API - Processes", version="0.1.0")
-app.include_router(
-    create_router(
+app = FastAPI(title="Roofer Online Processes", version="0.1.0")
+app.mount(
+    "/ogcapi",
+    create_app(
         catalog=catalog,
         backend=backend,
         store=store,
         authenticator=ReferenceAuthenticator(),
-        prefix="/ogcapi",
-    )
+    ),
 )
 
 
