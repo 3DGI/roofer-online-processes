@@ -11,9 +11,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ogc_processes.interfaces import (
     Authenticator,
+    ContractViolation,
     ExecutionBackend,
     JobStore,
     ProcessCatalog,
+    ProcessContractValidator,
 )
 from ogc_processes.models import (
     Conformance,
@@ -87,6 +89,7 @@ def create_app(
     backend: ExecutionBackend,
     store: JobStore,
     authenticator: Authenticator,
+    validator: ProcessContractValidator,
 ) -> FastAPI:
     """Create the OGC sub-application with host dependencies injected."""
     app = FastAPI(
@@ -140,6 +143,26 @@ def create_app(
     ) -> JSONResponse:
         del exc
         return problem_response(request, 400, "Request validation failed.")
+
+    @app.exception_handler(ContractViolation)
+    async def contract_problem(
+        request: Request, exc: ContractViolation
+    ) -> JSONResponse:
+        del exc
+        return problem_response(request, 400, "Process input validation failed.")
+
+    def validated_results(process_id: str, upstream_id: str, owner: str) -> Results:
+        results = backend.results(upstream_id, owner)
+        if results is None:
+            raise HTTPException(
+                status_code=500, detail="Execution returned no results."
+            )
+        try:
+            return validator.validate_results(process_id, results)
+        except ContractViolation as exc:
+            raise HTTPException(
+                status_code=500, detail="Invalid backend results."
+            ) from exc
 
     def root_url(request: Request) -> str:
         return (
@@ -258,7 +281,8 @@ def create_app(
                 status_code=400, detail="Requested execution mode is unavailable."
             )
         owner = subject(request)
-        submission = backend.submit(process_id, payload.inputs, owner, mode)
+        inputs = validator.validate_inputs(process_id, payload.inputs)
+        submission = backend.submit(process_id, inputs, owner, mode)
         now = datetime.now(UTC)
         job_id = str(uuid4())
         job = JobStatus(
@@ -277,12 +301,7 @@ def create_app(
         )
         store.create(job, submission.upstream_id, owner)
         if mode == JobControlOption.execute_sync:
-            results = backend.results(submission.upstream_id, owner)
-            if results is None:
-                raise HTTPException(
-                    status_code=500, detail="Execution returned no results."
-                )
-            return results
+            return validated_results(process_id, submission.upstream_id, owner)
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             headers={
@@ -346,9 +365,7 @@ def create_app(
         stored = store.get(job.id, owner)
         if stored is None:
             raise HTTPException(status_code=404, detail="Job not found.")
-        results = backend.results(stored[1], owner)
-        if results is None:
-            raise HTTPException(status_code=404, detail="Results are not available.")
+        results = validated_results(job.processID, stored[1], owner)
         selected = select_outputs(results, outputs)
         selected.links = [
             Link(
@@ -377,7 +394,9 @@ def create_app(
         stored = store.get(job.id, owner)
         if stored is None:
             raise HTTPException(status_code=404, detail="Job not found.")
-        output = backend.output(stored[1], output_id, owner)
+        output = validated_results(job.processID, stored[1], owner).outputs.get(
+            output_id
+        )
         if output is None:
             raise HTTPException(status_code=404, detail="Output is not available.")
         return output

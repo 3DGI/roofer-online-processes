@@ -79,3 +79,17 @@ class JobStore(Protocol):
     def list(self, subject: str) -> list[tuple[JobStatus, str]]: ...
 
     def update(self, job: JobStatus) -> None: ...
+
+
+class ContractViolation(ValueError):
+    """Transport-independent error containing only safe public diagnostics."""
+
+
+class ProcessContractValidator(Protocol):
+    """Host contracts applied before submission and before result projection."""
+
+    def validate_inputs(
+        self, process_id: str, inputs: dict[str, Any]
+    ) -> dict[str, Any]: ...
+
+    def validate_results(self, process_id: str, results: Results) -> Results: ...
