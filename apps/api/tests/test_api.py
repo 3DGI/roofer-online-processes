@@ -51,7 +51,9 @@ def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links
 def test_async_execution_returns_job_location() -> None:
     response = client.post(
         "/ogcapi/processes/roofer%3Areconstruct_buildings%3Av1/execution",
-        json={"inputs": {"point_cloud_ids": [1], "bag_id": 2}},
+        json={
+            "inputs": {"point_cloud_ids": [1], "bag": {"kind": "asset", "asset_id": 2}}
+        },
         headers={"Authorization": "Bearer test-user"},
     )
 
@@ -63,18 +65,23 @@ def test_async_execution_returns_job_location() -> None:
 def test_sync_execution_returns_results() -> None:
     response = client.post(
         "/ogcapi/processes/roofer%3Avalidate_point_cloud%3Av1/execution",
-        json={"inputs": {"point_cloud": "demo.laz"}},
+        json={"inputs": {"point_clouds": [{"kind": "asset", "asset_id": 123}]}},
         headers={"Prefer": "respond-sync"},
     )
 
     assert response.status_code == 200
-    assert response.json()["outputs"]["validation_report"]["status"] == "successful"
+    assert response.json()["outputs"]["validation_report"]["all_ready"] is True
 
 
 def test_jobs_are_scoped_to_authenticated_subject() -> None:
     created = client.post(
         "/ogcapi/processes/roofer%3Areconstruct_buildings%3Av1/execution",
-        json={"inputs": {}},
+        json={
+            "inputs": {
+                "point_cloud_ids": [123],
+                "bag": {"kind": "asset", "asset_id": 2},
+            }
+        },
         headers={"Authorization": "Bearer owner"},
     )
     job_id = created.json()["id"]
@@ -90,7 +97,7 @@ def test_jobs_are_scoped_to_authenticated_subject() -> None:
 def test_results_support_output_selection_and_per_output_retrieval() -> None:
     created = client.post(
         "/ogcapi/processes/roofer%3Aconvert_format%3Av1/execution",
-        json={"inputs": {}},
+        json={"inputs": {"model_3d_id": 789, "formats": ["obj"]}},
         headers={"Authorization": "Bearer result-user"},
     )
     job_id = created.json()["id"]
@@ -111,5 +118,5 @@ def test_results_support_output_selection_and_per_output_retrieval() -> None:
     assert selected.status_code == 200
     assert list(selected.json()["outputs"]) == ["converted_model"]
     assert output.status_code == 200
-    assert output.json()["reference"].startswith("urn:roofer:result:")
+    assert output.json() == selected.json()["outputs"]["converted_model"]
     assert invalid.status_code == 400

@@ -31,3 +31,13 @@ by the host adapter contract in [docs/integration-contract.md](docs/integration-
 
 See [docs/project-plan.md](docs/project-plan.md) and [docs/architecture.md](docs/architecture.md)
 for the implementation plan and deployment boundary.
+
+## API workflow
+
+Prepare uploaded, remote, or existing point clouds with `roofer:validate_point_cloud:v1`,
+inspect each outcome for ready IDs, then reconstruct with an explicit BAG selector. Convert
+or export owned ready models and retrieve authenticated artifacts. See the
+[client examples and production adapter requirements](docs/integration-contract.md).
+Contracts are enforced by runtime models and advertised JSON schemas, including the complete
+`inputsSchema` extension for constraints spanning multiple named inputs. The reference service
+uses deterministic fixtures and demo archives; production ingestion is the next milestone.

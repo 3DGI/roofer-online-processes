@@ -17,7 +17,7 @@ The host-side conclusions below are sound: validation against an existing asset 
 - OGC job status values are `accepted`, `running`, `successful`, `failed`, and `dismissed`. `dismissed` is part of the optional Dismiss conformance class, so cancellation is required only if that extension is advertised.
 - Process outputs must be declared in the process description and returned by value or reference according to the advertised transmission mode. Artifact links may point to authenticated Roofer download URLs, but local filesystem URIs must not be exposed.
 
-The reusable package is currently shaped around the approved 1.0 wire model: it uses jobID, omits the v2 processingEntityType, and declares 1.0 conformance URIs. It therefore needs a v2 alignment pass before implementation is complete. The v2 draft preserves the core resource and execution model, but its status schema uses id and requires processingEntityType; these fields must be implemented even when the v1 validator is used as a compatibility gate.
+The earlier assessment described a reusable package shaped around the approved 1.0 wire model: it used jobID, omitted the v2 processingEntityType, and declared 1.0 conformance URIs. The current protocol implements v2 status fields, conformance URIs and Prefer negotiation. The v2 draft preserves the core resource and execution model, but its status schema uses id and requires processingEntityType; these fields are now implemented even when a v1 validator is used as a compatibility gate.
 
 ## Compatibility validation strategy
 
@@ -48,12 +48,16 @@ Relevant endpoints:
 
 There is no validation endpoint. Validation is an implicit post-upload operation: the completed Tus upload starts Dagster `pointcloud`, whose `pointcloud_metadata` asset runs `lasinfo`; the status poll copies LAS metadata into the point-cloud asset. The existing process is named `point-cloud-upload`, so it represents ingestion and validation together and cannot be submitted against an existing asset through a process-specific API.
 
-The adapter must expose validation over existing point-cloud IDs. It must verify ownership and asset readiness, start or reuse the metadata workflow, and persist a process record dedicated to the OGC execution. The OGC result should contain validation state and metadata such as bounds, point count, classification codes, and point density. A failed validation is an OGC `failed` job with the stored error message; it does not produce a model.
-
-Process-specific input values (to be placed under the OGC execute request `inputs` member):
+The implemented public preparation contract accepts a nonempty `point_clouds` array of
+`upload`/`upload_url`, `asset`/`asset_id`, or `url`/`url` sources. The host adapter must resolve
+owned complete uploads internally, validate existing assets, and securely ingest remote LAS/LAZ.
+Add Tus creation metadata `processing=ogc` so byte completion does not automatically start UI
+validation; omission preserves today's behavior. A completed ordered `validation_report` is a
+successful OGC job even with invalid/failed sources and `all_ready: false`. Successful assets
+remain reusable; only reporting-workflow failure makes the job fail. Safe diagnostics omit URLs.
 
 ```json
-{"point_cloud_ids": [123]}
+{"inputs":{"point_clouds":[{"kind":"upload","upload_url":"https://roofer.example/api/v1/pointcloud/upload/123"},{"kind":"url","url":"https://data.example/survey.laz"}]}}
 ```
 
 The current Dagster asset accepts one `pointcloud_path` and one `asset_id`; multiple IDs require one run per asset or a new batch operation.
@@ -71,11 +75,19 @@ Process-specific input values (to be placed under the OGC execute request `input
 ```json
 {
   "point_cloud_ids": [123, 124],
-  "bag_id": 456,
+  "bag": {"kind": "buildings", "building_ids": ["0000000000000001"]},
   "name": "Nijmegen centrum",
   "config": {}
 }
 ```
+
+The public contract now requires `bag`, discriminated as owned `asset`, explicit `buildings`,
+or Polygon/MultiPolygon `area` in EPSG:28992. Buffer areas by one metre, dissolve overlaps,
+and select fully contained footprints. Host services must create an owned BAG selection and
+reject empty selections, missing identifiers, and configured limits without capped truncation.
+Results record resolved BAG ID, sorted identifiers and available dataset date alongside model
+artifacts; they do not promise immutable geometry. The reference uses deterministic fixtures.
+Remote ingestion limits, target/redirect checks and confidential URL handling remain adapter work.
 
 The current implementation is asynchronous. There is no bounded synchronous reconstruction endpoint.
 
@@ -136,7 +148,7 @@ The OGC execution endpoint should advertise asynchronous execution for the exist
 ## Required Roofer Online changes
 
 1. Add an application service for OGC submissions instead of coupling the wrapper to route handlers and `BackgroundTasks`.
-2. Add a standalone validation submission operation for existing point-cloud assets.
+2. Add source preparation for completed uploads, existing assets and secure remote URLs.
 3. Add a standalone conversion Dagster job and process type for existing models.
 4. Return the internal process ID from CityDB export submission, or provide a service-level return object containing it.
 5. Add durable OGC job mapping and result persistence.
@@ -144,7 +156,7 @@ The OGC execution endpoint should advertise asynchronous execution for the exist
 7. Expose artifact references through stable authenticated URLs; do not expose local `uri` values directly.
 8. Preserve the existing JWT and owner/admin checks for every input asset, model, process, and job.
 9. Normalize internal `ok`, `in-progress`, and `error` plus Dagster run states into the OGC job lifecycle and retain detailed error messages for failed jobs. Invalid input should be rejected as an execute exception before creating a job; execution-time failures should become `failed` jobs.
-10. Update the protocol layer for v2 status and conformance fields (`id`, `processingEntityType`, v2 conformance URIs), HTTP `Prefer` negotiation, and the v2 OpenAPI schemas; retain v1 validator coverage as a compatibility regression test.
+10. Retain the implemented v2 protocol fields, Prefer negotiation and OpenAPI schemas; continue conformance verification.
 
 
 ## Part 1 and Part 2 endpoint crosswalk

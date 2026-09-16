@@ -97,6 +97,7 @@ class ProcessDescription(ProcessSummary):
     """Complete process description."""
 
     inputs: dict[str, InputDescription]
+    inputsSchema: dict[str, Any] | None = None
     outputs: dict[str, OutputDescription]
     jobControlOptions: list[JobControlOption]
     outputTransmission: list[TransmissionMode]
