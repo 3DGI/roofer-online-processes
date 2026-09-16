@@ -10,8 +10,8 @@ from pydantic import BaseModel, Field
 class JobControlOption(str, Enum):
     """Execution modes advertised by a process."""
 
-    execute_async = "execute-async"
-    execute_sync = "execute-sync"
+    execute_async = "async-execute"
+    execute_sync = "sync-execute"
 
 
 class TransmissionMode(str, Enum):
@@ -106,7 +106,7 @@ class ProcessList(BaseModel):
     """Process collection response."""
 
     processes: list[ProcessSummary]
-    links: list[Link] = Field(default_factory=list)
+    links: list[Link]
 
 
 class ExecuteRequest(BaseModel):
@@ -121,8 +121,8 @@ class JobStatus(BaseModel):
     """OGC API Processes 2.0 job resource."""
 
     id: str
-    processID: str
-    processingEntityType: Literal["ogc-api-processes"] = "ogc-api-processes"
+    processID: str = Field(json_schema_extra={"format": "uri"})
+    processingEntityType: Literal["ogc-api-processes"]
     status: StatusCode
     message: str | None = None
     created: datetime
@@ -137,7 +137,7 @@ class JobList(BaseModel):
     """Job collection response."""
 
     jobs: list[JobStatus]
-    links: list[Link] = Field(default_factory=list)
+    links: list[Link]
 
 
 class Results(BaseModel):
@@ -150,7 +150,7 @@ class Results(BaseModel):
 class ExceptionReport(BaseModel):
     """RFC 7807 problem details response."""
 
-    type: str = "about:blank"
+    type: str
     title: str
     status: int
     detail: str | None = None
