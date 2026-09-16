@@ -1,0 +1,10 @@
+{
+  "name": "roofer-online-processes-tools",
+  "private": true,
+  "engines": {
+    "node": ">=20.17"
+  },
+  "devDependencies": {
+    "@geonovum/ogc-checker": "1.3.1"
+  }
+}
