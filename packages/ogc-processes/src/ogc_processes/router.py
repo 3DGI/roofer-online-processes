@@ -1,15 +1,25 @@
-"""FastAPI router for OGC API - Processes Core."""
+"""Mountable OGC API - Processes Part 1 version 2 application."""
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import FastAPI, HTTPException, Query, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .interfaces import Authenticator, ExecutionBackend, JobStore, ProcessCatalog
-from .models import (
+from ogc_processes.interfaces import (
+    Authenticator,
+    ExecutionBackend,
+    JobStore,
+    ProcessCatalog,
+)
+from ogc_processes.models import (
     Conformance,
+    ExceptionReport,
     ExecuteRequest,
+    JobControlOption,
     JobList,
     JobStatus,
     LandingPage,
@@ -20,29 +30,64 @@ from .models import (
     StatusCode,
 )
 
-CONFORMANCE_CORE = "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/core"
-CONFORMANCE_JSON = "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/json"
+CONFORMANCE_CORE = "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/core"
+CONFORMANCE_JSON = "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/json"
+CONFORMANCE_PROCESS_DESCRIPTION = (
+    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/ogc-process-description"
+)
+CONFORMANCE_JOB_LIST = (
+    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/job-list"
+)
+PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
+    400: {"model": ExceptionReport},
+    404: {"model": ExceptionReport},
+    500: {"model": ExceptionReport},
+}
 
 
-def create_router(
+def create_app(
     *,
     catalog: ProcessCatalog,
     backend: ExecutionBackend,
     store: JobStore,
     authenticator: Authenticator,
-    prefix: str,
-) -> APIRouter:
-    """Create an OGC router with all host dependencies injected."""
-    router = APIRouter(prefix=prefix, tags=["OGC Processes"])
+) -> FastAPI:
+    """Create the OGC sub-application with host dependencies injected."""
+    app = FastAPI(
+        title="Roofer Online OGC API - Processes",
+        version="2.0.0",
+        docs_url=None,
+        redoc_url=None,
+    )
 
-    def base_url(request: Request) -> str:
-        return str(request.base_url).rstrip("/") + prefix
+    @app.exception_handler(StarletteHTTPException)
+    async def http_problem(
+        request: Request, exc: StarletteHTTPException
+    ) -> JSONResponse:
+        detail = (
+            exc.detail
+            if isinstance(exc.detail, str)
+            else "Request could not be completed."
+        )
+        return problem_response(request, exc.status_code, detail)
 
-    def principal(request: Request) -> str:
+    @app.exception_handler(RequestValidationError)
+    async def validation_problem(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        del exc
+        return problem_response(request, 400, "Request validation failed.")
+
+    def root_url(request: Request) -> str:
+        return (
+            f"{str(request.base_url).rstrip('/')}{request.scope.get('root_path', '')}"
+        )
+
+    def subject(request: Request) -> str:
         return authenticator.authenticate(request.headers.get("authorization")).subject
 
     def job_links(request: Request, job_id: str) -> list[Link]:
-        root = base_url(request)
+        root = root_url(request)
         return [
             Link(href=f"{root}/jobs/{job_id}", rel="self", type="application/json"),
             Link(
@@ -52,14 +97,39 @@ def create_router(
             ),
         ]
 
-    @router.get("", response_model=LandingPage)
+    def refreshed_job(request: Request, job_id: str, owner: str) -> JobStatus:
+        stored = store.get(job_id, owner)
+        if stored is None:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        job, upstream_id = stored
+        job.status, job.message, job.progress, job.started, job.finished = (
+            backend.status(upstream_id, owner)
+        )
+        job.updated = datetime.now(UTC)
+        store.update(job)
+        return job
+
+    def completed_job(request: Request, job_id: str, owner: str) -> JobStatus:
+        job = refreshed_job(request, job_id, owner)
+        if job.status == StatusCode.failed:
+            raise HTTPException(status_code=500, detail="Job processing failed.")
+        if job.status != StatusCode.successful:
+            raise HTTPException(status_code=404, detail="Results are not available.")
+        return job
+
+    @app.get("/", response_model=LandingPage, responses=PROBLEM_RESPONSES)
     def landing(request: Request) -> LandingPage:
-        root = base_url(request)
+        root = root_url(request)
         return LandingPage(
             title="Roofer Online OGC API - Processes",
             description="OGC API - Processes interface for Roofer Online workflows.",
             links=[
-                Link(href=root, rel="self", type="application/json"),
+                Link(href=f"{root}/", rel="self", type="application/json"),
+                Link(
+                    href=f"{root}/openapi.json",
+                    rel="service-desc",
+                    type="application/vnd.oai.openapi+json;version=3.1",
+                ),
                 Link(
                     href=f"{root}/conformance",
                     rel="conformance",
@@ -72,130 +142,271 @@ def create_router(
             ],
         )
 
-    @router.get("/conformance", response_model=Conformance)
+    @app.get("/conformance", response_model=Conformance)
     def conformance() -> Conformance:
-        return Conformance(conformsTo=[CONFORMANCE_CORE, CONFORMANCE_JSON])
+        return Conformance(
+            conformsTo=[
+                CONFORMANCE_CORE,
+                CONFORMANCE_JSON,
+                CONFORMANCE_PROCESS_DESCRIPTION,
+                CONFORMANCE_JOB_LIST,
+            ]
+        )
 
-    @router.get("/processes", response_model=ProcessList)
+    @app.get("/processes", response_model=ProcessList, responses=PROBLEM_RESPONSES)
     def list_processes(request: Request) -> ProcessList:
-        root = base_url(request)
-        processes = catalog.list_processes()
+        root = root_url(request)
         return ProcessList(
-            processes=processes,
+            processes=catalog.list_processes(),
             links=[Link(href=f"{root}/processes", rel="self", type="application/json")],
         )
 
-    @router.get("/processes/{process_id}", response_model=ProcessDescription)
+    @app.get(
+        "/processes/{process_id}",
+        response_model=ProcessDescription,
+        responses=PROBLEM_RESPONSES,
+    )
     def get_process(process_id: str) -> ProcessDescription:
         process = catalog.get_process(process_id)
         if process is None:
-            raise HTTPException(status_code=404, detail="Process not found")
+            raise HTTPException(status_code=404, detail="Process not found.")
         return process
 
-    @router.post("/processes/{process_id}/execution", response_model=None)
+    @app.post(
+        "/processes/{process_id}/execution",
+        response_model=None,
+        responses={
+            200: {"model": Results},
+            201: {"model": JobStatus},
+            **PROBLEM_RESPONSES,
+        },
+    )
     def execute(
-        request: Request,
-        process_id: str,
-        payload: ExecuteRequest,
+        request: Request, process_id: str, payload: ExecuteRequest
     ) -> JSONResponse | Results:
         process = catalog.get_process(process_id)
         if process is None:
-            raise HTTPException(status_code=404, detail="Process not found")
-        subject = principal(request)
-        selected_mode = payload.mode
-        if selected_mode is None:
-            selected_mode = process.jobControlOptions[0]
-        submission = backend.submit(process_id, payload.inputs, subject, selected_mode)
+            raise HTTPException(status_code=404, detail="Process not found.")
+        mode = execution_mode(request.headers.get("prefer"))
+        if mode not in process.jobControlOptions:
+            raise HTTPException(
+                status_code=400, detail="Requested execution mode is unavailable."
+            )
+        owner = subject(request)
+        submission = backend.submit(process_id, payload.inputs, owner, mode)
         now = datetime.now(UTC)
         job_id = str(uuid4())
         job = JobStatus(
-            jobID=job_id,
+            id=job_id,
             processID=process_id,
             status=submission.status,
             message=submission.message,
             created=now,
-            started=now if submission.status == StatusCode.running else None,
-            finished=now if submission.status == StatusCode.successful else None,
+            finished=now
+            if submission.status in {StatusCode.successful, StatusCode.failed}
+            else None,
             updated=now,
             progress=100 if submission.status == StatusCode.successful else 0,
             links=job_links(request, job_id),
         )
-        store.create(job, submission.upstream_id, subject)
-        if (
-            selected_mode.value == "execute-sync"
-            and submission.status == StatusCode.successful
-        ):
-            results = backend.results(submission.upstream_id, subject)
+        store.create(job, submission.upstream_id, owner)
+        if mode == JobControlOption.execute_sync:
+            results = backend.results(submission.upstream_id, owner)
             if results is None:
                 raise HTTPException(
-                    status_code=500, detail="Execution returned no results"
+                    status_code=500, detail="Execution returned no results."
                 )
             return results
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
-            headers={"Location": f"{base_url(request)}/jobs/{job_id}"},
+            headers={
+                "Location": f"{root_url(request)}/jobs/{job_id}",
+                "Preference-Applied": "respond-async",
+            },
             content=job.model_dump(mode="json"),
         )
 
-    def refreshed_job(request: Request, job_id: str, subject: str) -> JobStatus:
-        stored = store.get(job_id, subject)
-        if stored is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-        job, upstream_id = stored
-        current_status, message, progress, started, finished = backend.status(
-            upstream_id, subject
-        )
-        job.status = current_status
-        job.message = message
-        job.progress = progress
-        job.started = started
-        job.finished = finished
-        job.updated = datetime.now(UTC)
-        store.update(job)
-        return job
-
-    @router.get("/jobs", response_model=JobList)
-    def list_jobs(request: Request) -> JobList:
-        subject = principal(request)
-        jobs = [
-            refreshed_job(request, job.jobID, subject) for job, _ in store.list(subject)
-        ]
-        return JobList(
-            jobs=jobs, links=[Link(href=f"{base_url(request)}/jobs", rel="self")]
-        )
-
-    @router.get("/jobs/{job_id}", response_model=JobStatus)
-    def get_job(request: Request, job_id: str) -> JobStatus:
-        return refreshed_job(request, job_id, principal(request))
-
-    @router.delete("/jobs/{job_id}", response_model=JobStatus)
-    def dismiss_job(request: Request, job_id: str) -> JobStatus:
-        subject = principal(request)
-        stored = store.get(job_id, subject)
-        if stored is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-        job, upstream_id = stored
-        if not backend.dismiss(upstream_id, subject):
-            raise HTTPException(status_code=409, detail="Job could not be dismissed")
-        job.status = StatusCode.dismissed
-        job.updated = datetime.now(UTC)
-        store.update(job)
-        return job
-
-    @router.get("/jobs/{job_id}/results", response_model=Results)
-    def get_results(request: Request, job_id: str) -> Results:
-        subject = principal(request)
-        job = refreshed_job(request, job_id, subject)
-        if job.status != StatusCode.successful:
+    @app.get("/jobs", response_model=JobList, responses=PROBLEM_RESPONSES)
+    def list_jobs(
+        request: Request,
+        type: str | None = None,
+        processID: str | None = None,
+        status: StatusCode | None = None,
+        datetime_: str | None = Query(default=None, alias="datetime"),
+        minDuration: float | None = Query(default=None, ge=0),
+        maxDuration: float | None = Query(default=None, ge=0),
+        limit: int = Query(default=10, ge=1, le=1000),
+    ) -> JobList:
+        if type is not None and type != "ogc-api-processes":
             raise HTTPException(
-                status_code=400, detail="Job has not completed successfully"
+                status_code=400, detail="Unsupported processing entity type."
             )
-        stored = store.get(job_id, subject)
-        if stored is None:
-            raise HTTPException(status_code=404, detail="Job not found")
-        results = backend.results(stored[1], subject)
-        if results is None:
-            raise HTTPException(status_code=404, detail="Results not found")
-        return results
+        if (
+            minDuration is not None
+            and maxDuration is not None
+            and minDuration > maxDuration
+        ):
+            raise HTTPException(
+                status_code=400, detail="minDuration must not exceed maxDuration."
+            )
+        owner = subject(request)
+        jobs = [refreshed_job(request, job.id, owner) for job, _ in store.list(owner)]
+        jobs = filter_jobs(jobs, processID, status, datetime_, minDuration, maxDuration)
+        return JobList(
+            jobs=jobs[:limit],
+            links=[
+                Link(
+                    href=f"{root_url(request)}/jobs",
+                    rel="self",
+                    type="application/json",
+                )
+            ],
+        )
 
-    return router
+    @app.get("/jobs/{job_id}", response_model=JobStatus, responses=PROBLEM_RESPONSES)
+    def get_job(request: Request, job_id: str) -> JobStatus:
+        return refreshed_job(request, job_id, subject(request))
+
+    @app.get(
+        "/jobs/{job_id}/results", response_model=Results, responses=PROBLEM_RESPONSES
+    )
+    def get_results(
+        request: Request, job_id: str, outputs: str | None = None
+    ) -> Results:
+        owner = subject(request)
+        job = completed_job(request, job_id, owner)
+        stored = store.get(job.id, owner)
+        if stored is None:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        results = backend.results(stored[1], owner)
+        if results is None:
+            raise HTTPException(status_code=404, detail="Results are not available.")
+        selected = select_outputs(results, outputs)
+        selected.links = [
+            Link(
+                href=f"{root_url(request)}/jobs/{job.id}/results/{output_id}",
+                rel="item",
+                type="application/json",
+                title=output_id,
+            )
+            for output_id in selected.outputs
+        ]
+        return selected
+
+    @app.get(
+        "/jobs/{job_id}/results/{output_id}",
+        response_model=None,
+        responses=PROBLEM_RESPONSES,
+    )
+    @app.get(
+        "/jobs/{job_id}/results/{output_id}/0",
+        response_model=None,
+        responses=PROBLEM_RESPONSES,
+    )
+    def get_output(request: Request, job_id: str, output_id: str) -> Any:
+        owner = subject(request)
+        job = completed_job(request, job_id, owner)
+        stored = store.get(job.id, owner)
+        if stored is None:
+            raise HTTPException(status_code=404, detail="Job not found.")
+        output = backend.output(stored[1], output_id, owner)
+        if output is None:
+            raise HTTPException(status_code=404, detail="Output is not available.")
+        return output
+
+    return app
+
+
+def problem_response(request: Request, status_code: int, detail: str) -> JSONResponse:
+    """Return an RFC 7807 response for protocol and validation errors."""
+    title = {400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(
+        status_code, "Error"
+    )
+    report = ExceptionReport(
+        title=title, status=status_code, detail=detail, instance=str(request.url)
+    )
+    return JSONResponse(
+        status_code=status_code,
+        media_type="application/problem+json",
+        content=report.model_dump(),
+    )
+
+
+def execution_mode(prefer: str | None) -> JobControlOption:
+    """Negotiate execution mode from the RFC 7240 Prefer header."""
+    if prefer is not None and "respond-sync" in prefer:
+        return JobControlOption.execute_sync
+    return JobControlOption.execute_async
+
+
+def select_outputs(results: Results, requested: str | None) -> Results:
+    """Validate and select comma-separated output identifiers."""
+    if requested is None:
+        return Results(outputs=results.outputs.copy())
+    output_ids = [output_id for output_id in requested.split(",") if output_id]
+    if not output_ids or any(
+        output_id not in results.outputs for output_id in output_ids
+    ):
+        raise HTTPException(
+            status_code=400, detail="Requested output is not available."
+        )
+    return Results(
+        outputs={output_id: results.outputs[output_id] for output_id in output_ids}
+    )
+
+
+def filter_jobs(
+    jobs: list[JobStatus],
+    process_id: str | None,
+    job_status: StatusCode | None,
+    datetime_filter: str | None,
+    minimum: float | None,
+    maximum: float | None,
+) -> list[JobStatus]:
+    """Apply the Job List filters supported by the reference store."""
+    filtered = [
+        job for job in jobs if process_id is None or job.processID == process_id
+    ]
+    filtered = [
+        job for job in filtered if job_status is None or job.status == job_status
+    ]
+    if datetime_filter is not None:
+        filtered = [job for job in filtered if datetime_matches(job, datetime_filter)]
+    if minimum is not None or maximum is not None:
+        filtered = [job for job in filtered if duration_matches(job, minimum, maximum)]
+    return filtered
+
+
+def datetime_matches(job: JobStatus, value: str) -> bool:
+    """Match an ISO 8601 instant or interval against job creation time."""
+    if "/" in value:
+        start_text, end_text = value.split("/", maxsplit=1)
+        start = parse_datetime(start_text) if start_text != ".." else None
+        end = parse_datetime(end_text) if end_text != ".." else None
+        return (start is None or job.created >= start) and (
+            end is None or job.created <= end
+        )
+    instant = parse_datetime(value)
+    return instant is not None and job.created == instant
+
+
+def parse_datetime(value: str) -> datetime | None:
+    """Parse ISO 8601 without using exception flow outside this boundary."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def duration_matches(
+    job: JobStatus, minimum: float | None, maximum: float | None
+) -> bool:
+    """Match elapsed job duration bounds in seconds."""
+    if job.started is None or job.finished is None:
+        return False
+    elapsed = (job.finished - job.started).total_seconds()
+    return (minimum is None or elapsed >= minimum) and (
+        maximum is None or elapsed <= maximum
+    )
