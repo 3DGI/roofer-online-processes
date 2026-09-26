@@ -2,9 +2,8 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from io import BytesIO
+from pathlib import Path
 from typing import Any
-from zipfile import ZipFile
 
 from ogc_processes.interfaces import ContractViolation
 from ogc_processes.models import (
@@ -108,9 +107,17 @@ class ReferenceBackend:
     """
 
     def __init__(
-        self, feature_limit: int = 10, artifact_base_url: str = "http://localhost:8000"
+        self,
+        feature_limit: int = 10,
+        artifact_base_url: str = "http://localhost:8000",
+        data_dir: str | Path | None = None,
     ) -> None:
         self.artifact_base_url = artifact_base_url.rstrip("/")
+        self.data_dir = (
+            Path(data_dir)
+            if data_dir is not None
+            else Path(__file__).resolve().parents[4] / "data"
+        )
         self._counter = 0
         self.feature_limit = feature_limit
         self._results: dict[str, tuple[str, Results]] = {}
@@ -248,7 +255,7 @@ class ReferenceBackend:
                 else generated_id
             )
             self.bags[subject, bag_id] = selection
-            formats = ["cityjson", "obj", "gpkg", "3dtiles"]
+            formats = ["cityjson", "gpkg"]
             self.models[subject, generated_id] = formats
             payload = {
                 "model_3d_id": generated_id,
@@ -297,21 +304,31 @@ class ReferenceBackend:
                     f"{self.artifact_base_url}/api/v1/reconstruction/"
                     f"{model_id}/export/{format}"
                 ),
-                "type": "application/zip",
+                "type": self.artifact_media_type(format),
             }
             for format in formats
         }
 
+    @staticmethod
+    def artifact_media_type(format: str) -> str:
+        return {
+            "gpkg": "application/geopackage+sqlite3",
+            "cityjson": "application/json",
+        }[format]
+
     def artifact(self, model_id: int, format: str, subject: str) -> bytes | None:
         if format not in self.models.get((subject, model_id), []):
             return None
-        buffer = BytesIO()
-        with ZipFile(buffer, "w") as archive:
-            archive.writestr(
-                "README.txt",
-                f"Deterministic demo artifact: {format}; model {model_id}.",
-            )
-        return buffer.getvalue()
+        filename = {
+            "gpkg": "reconstruction.gpkg",
+            "cityjson": "reconstruction.city.json",
+        }.get(format)
+        if filename is None:
+            return None
+        try:
+            return (self.data_dir / filename).read_bytes()
+        except OSError:
+            return None
 
     def status(
         self, upstream_id: str, subject: str

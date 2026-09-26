@@ -13,6 +13,7 @@ COPY apps/api/pyproject.toml apps/api/pyproject.toml
 COPY packages/ogc-processes/pyproject.toml packages/ogc-processes/pyproject.toml
 COPY apps/api/src apps/api/src
 COPY packages/ogc-processes/src packages/ogc-processes/src
+COPY data /app/data
 
 RUN uv sync --locked --no-dev --package roofer-online-processes-api
 

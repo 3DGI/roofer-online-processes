@@ -19,7 +19,7 @@ from shapely import from_wkt
 
 PositiveID = Annotated[int, Field(strict=True, gt=0)]
 Nonblank = Annotated[str, Field(strict=True, pattern=r"\S")]
-Format = Literal["obj", "gpkg", "cityjson", "cityjson_terrain", "3dtiles"]
+Format = Literal["gpkg", "cityjson"]
 
 
 class ContractModel(BaseModel):
@@ -311,7 +311,7 @@ CONTRACTS = {
         ConversionInputs,
         "converted_model",
         ConvertedModel,
-        {"model_3d_id": 789, "formats": ["cityjson", "obj"]},
+        {"model_3d_id": 789, "formats": ["cityjson", "gpkg"]},
     ),
     "roofer:export_to_3dcitydb:v1": ProcessContract(
         ExportInputs,
