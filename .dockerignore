@@ -1,0 +1,16 @@
+.git
+.venv
+.idea
+.pytest_cache
+.ruff_cache
+.mypy_cache
+__pycache__
+*.py[cod]
+node_modules
+dist
+build
+coverage
+.coverage
+data
+tests
+**/tests
