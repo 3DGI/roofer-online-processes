@@ -36,8 +36,12 @@ app.mount(
 
 
 @app.get("/")
-def root() -> dict[str, str]:
-    return {"service": "roofer-online-processes", "docs": "/docs"}
+def root() -> dict[str, object]:
+    return {
+        "service": "roofer-online-processes",
+        "docs": "/docs",
+        "links": [{"rel": "ogcapi", "href": "/ogcapi/"}],
+    }
 
 
 @app.get("/health")

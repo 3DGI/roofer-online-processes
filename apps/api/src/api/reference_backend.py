@@ -43,13 +43,20 @@ class ReferenceCatalog:
     def __init__(self) -> None:
         self._processes = []
         for process_id, contract in CONTRACTS.items():
+            # Keep this proposal process off the public catalog until it is ready.
+            if process_id == "roofer:export_to_3dcitydb:v1":
+                continue
             schema = contract.inputs.model_json_schema(by_alias=True)
             definitions = schema.get("$defs", {})
             self._processes.append(
                 ProcessDescription(
                     id=process_id,
                     title=process_id.split(":")[1].replace("_", " ").title(),
-                    description="Deterministic reference workflow.",
+                    description={
+                        "roofer:validate_point_cloud:v1": "Check that the selected point clouds are ready to use.",
+                        "roofer:reconstruct_buildings:v1": "Build 3D models from point clouds and building footprints.",
+                        "roofer:convert_format:v1": "Convert a model into the formats you need.",
+                    }.get(process_id, "A Roofer processing workflow."),
                     inputsSchema=schema,
                     version="1.0.0",
                     inputs={
