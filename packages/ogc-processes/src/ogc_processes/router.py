@@ -47,6 +47,16 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 
 
+def root_url(request: Request) -> str:
+    """Build the public mount URL from the external prefix and mounted path."""
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    app_root_path = request.scope.get("app_root_path", "").rstrip("/")
+    mount_path = root_path
+    if app_root_path and root_path.startswith(app_root_path):
+        mount_path = root_path[len(app_root_path) :]
+    return f"{str(request.base_url).rstrip('/')}{mount_path}"
+
+
 def _normalize_openapi_30(node: Any) -> None:
     """Rewrite Pydantic's OpenAPI 3.1 constructs for OpenAPI 3.0 clients."""
     if isinstance(node, dict):
@@ -163,11 +173,6 @@ def create_app(
             raise HTTPException(
                 status_code=500, detail="Invalid backend results."
             ) from exc
-
-    def root_url(request: Request) -> str:
-        return (
-            f"{str(request.base_url).rstrip('/')}{request.scope.get('root_path', '')}"
-        )
 
     def subject(request: Request) -> str:
         return authenticator.authenticate(request.headers.get("authorization")).subject

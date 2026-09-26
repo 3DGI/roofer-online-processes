@@ -1,7 +1,26 @@
 from api.main import app
+from fastapi import Request
 from fastapi.testclient import TestClient
+from ogc_processes.router import root_url
 
 client = TestClient(app)
+
+
+def test_root_url_combines_external_and_mount_paths_once() -> None:
+    request = Request(
+        {
+            "type": "http",
+            "scheme": "https",
+            "server": ("api.example.test", 443),
+            "headers": [],
+            "root_path": "/public/ogcapi",
+            "app_root_path": "/public",
+            "path": "/public/ogcapi/",
+            "query_string": b"",
+        }
+    )
+
+    assert root_url(request) == "https://api.example.test/public/ogcapi"
 
 
 def test_process_collection_exposes_proposal_processes() -> None:
@@ -59,6 +78,7 @@ def test_async_execution_returns_job_location() -> None:
 
     assert response.status_code == 201
     assert response.headers["location"].startswith("http://testserver/ogcapi/jobs/")
+    assert response.json()["links"][0]["href"] == response.headers["location"]
     assert response.json()["status"] == "accepted"
 
 

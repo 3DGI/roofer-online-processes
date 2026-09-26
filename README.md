@@ -15,6 +15,11 @@ just check
 ```
 
 The reference service runs at <http://localhost:8000>. Its OGC API is under `/ogcapi`.
+Set `ROOFER_PROCESSES_PUBLIC_BASE_URL` to the public HTTPS origin (and any path prefix)
+when deploying the reference API. Artifact links use this base URL; it defaults to
+`http://localhost:8000` for local development. When running behind Caddy or another
+reverse proxy, forward the public `Host` and scheme (`X-Forwarded-Host` and
+`X-Forwarded-Proto`) and configure Uvicorn to trust that proxy's headers.
 With the API running, validate it against the OGC API - Processes 2.0.0 draft using:
 
 ```bash
@@ -31,6 +36,7 @@ by the host adapter contract in [docs/integration-contract.md](docs/integration-
 
 See [docs/project-plan.md](docs/project-plan.md) and [docs/architecture.md](docs/architecture.md)
 for the implementation plan and deployment boundary.
+The [public URL fixes plan](docs/public-url-fixes-plan.md) covers proxy and artifact links.
 
 ## API workflow
 
