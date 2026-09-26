@@ -11,6 +11,5 @@ dist
 build
 coverage
 .coverage
-data
 tests
 **/tests

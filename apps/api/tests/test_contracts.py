@@ -1,6 +1,4 @@
 import json
-from io import BytesIO
-from zipfile import ZipFile
 
 import pytest
 from api.process_contracts import CONTRACTS, RooferContractValidator
@@ -44,7 +42,7 @@ def service():
         content = backend.artifact(model_id, format, owner)
         if content is None:
             raise HTTPException(404)
-        return Response(content, media_type="application/zip")
+        return Response(content, media_type=backend.artifact_media_type(format))
 
     return TestClient(app), backend, store
 
@@ -63,8 +61,8 @@ def execute(client, operation, inputs, sync=True):
 def test_artifact_urls_use_configured_public_base_url() -> None:
     backend = ReferenceBackend(artifact_base_url="https://api.example.test/proxy/")
 
-    assert backend._artifacts(42, ["obj"])["obj"]["href"] == (
-        "https://api.example.test/proxy/api/v1/reconstruction/42/export/obj"
+    assert backend._artifacts(42, ["gpkg"])["gpkg"]["href"] == (
+        "https://api.example.test/proxy/api/v1/reconstruction/42/export/gpkg"
     )
     assert ReferenceBackend().artifact_base_url == "http://localhost:8000"
 
@@ -226,7 +224,7 @@ def test_buffered_area_and_limit(service, wkt):
 def test_retrieval_artifacts_and_bad_backend(service):
     client, backend, _ = service
     created = execute(
-        client, "convert_format", {"model_3d_id": 789, "formats": ["obj"]}, sync=False
+        client, "convert_format", {"model_3d_id": 789, "formats": ["gpkg"]}, sync=False
     )
     location = created.headers["location"]
     headers = {"Authorization": "Bearer owner"}
@@ -244,12 +242,12 @@ def test_retrieval_artifacts_and_bad_backend(service):
         client.get(location + "/results/converted_model", headers=headers).json()
         == complete
     )
-    artifact = client.get(complete["artifacts"]["obj"]["href"], headers=headers)
-    assert artifact.headers["content-type"] == "application/zip"
-    assert ZipFile(BytesIO(artifact.content)).testzip() is None
+    artifact = client.get(complete["artifacts"]["gpkg"]["href"], headers=headers)
+    assert artifact.headers["content-type"] == "application/geopackage+sqlite3"
+    assert artifact.content == (backend.data_dir / "reconstruction.gpkg").read_bytes()
     assert (
         client.get(
-            complete["artifacts"]["obj"]["href"],
+            complete["artifacts"]["gpkg"]["href"],
             headers={"Authorization": "Bearer other"},
         ).status_code
         == 404

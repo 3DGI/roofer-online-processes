@@ -59,4 +59,7 @@ def artifact(request: Request, model_3d_id: int, format: str) -> Response:
     content = backend.artifact(model_3d_id, format, owner)
     if content is None:
         raise HTTPException(status_code=404, detail="Artifact not found.")
-    return Response(content=content, media_type="application/zip")
+    return Response(
+        content=content,
+        media_type=backend.artifact_media_type(format),
+    )
