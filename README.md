@@ -39,18 +39,17 @@ The reference API can be deployed on `webserver-fsn1` at
 memory, so restarting its single worker clears active jobs. Ensure the hostname has an A record
 for `46.224.130.97` before enabling the Caddy site.
 
-From the repository root, copy the tracked source to the deployment directory:
+From the repository root, deploy the current commit with:
 
 ```bash
-git archive HEAD | ssh webserver-fsn1 'mkdir -p /home/deploy/roofer-online-processes && tar -x -C /home/deploy/roofer-online-processes'
+just deploy
 ```
 
-Then start or update the API and install the Caddy site from the `3dgi-sysadmin` checkout:
-
-```bash
-ssh webserver-fsn1 'cd /home/deploy/roofer-online-processes && docker compose up -d --build'
-cd ../3dgi-sysadmin && just caddy webserver-fsn1
-```
+This copies the committed source over SSH using the `3dgi-webserver` alias from your local
+`~/.ssh/config`, rebuilds and starts the Compose service, then runs the Caddy Ansible recipe
+from the sibling `../3dgi-sysadmin` checkout. Ansible targets the inventory name
+`webserver-fsn1`. Commit any changes you want deployed first; `git archive HEAD` excludes
+uncommitted and untracked files.
 
 Inspect service health and logs with:
 
