@@ -32,6 +32,36 @@ the API violates the selected standard.
 The reusable protocol package is in `packages/ogc-processes`. Roofer Online integration is defined
 by the host adapter contract in [docs/integration-contract.md](docs/integration-contract.md).
 
+## Staging deployment
+
+The reference API can be deployed on `webserver-fsn1` at
+<https://processes.staging.roofer-online.nl>. It uses demo authentication and keeps jobs in
+memory, so restarting its single worker clears active jobs. Ensure the hostname has an A record
+for `46.224.130.97` before enabling the Caddy site.
+
+From the repository root, copy the tracked source to the deployment directory:
+
+```bash
+git archive HEAD | ssh webserver-fsn1 'mkdir -p /home/deploy/roofer-online-processes && tar -x -C /home/deploy/roofer-online-processes'
+```
+
+Then start or update the API and install the Caddy site from the `3dgi-sysadmin` checkout:
+
+```bash
+ssh webserver-fsn1 'cd /home/deploy/roofer-online-processes && docker compose up -d --build'
+cd ../3dgi-sysadmin && just caddy webserver-fsn1
+```
+
+Inspect service health and logs with:
+
+```bash
+ssh webserver-fsn1 'docker compose -f /home/deploy/roofer-online-processes/compose.yaml ps'
+ssh webserver-fsn1 'docker compose -f /home/deploy/roofer-online-processes/compose.yaml logs -f api'
+```
+
+For later updates, repeat the source transfer and `docker compose up -d --build` command. The
+Compose binding is loopback-only; public traffic reaches the API through Caddy.
+
 ## Scope and provenance
 
 See [docs/project-plan.md](docs/project-plan.md) and [docs/architecture.md](docs/architecture.md)
