@@ -60,6 +60,15 @@ def execute(client, operation, inputs, sync=True):
     )
 
 
+def test_artifact_urls_use_configured_public_base_url() -> None:
+    backend = ReferenceBackend(artifact_base_url="https://api.example.test/proxy/")
+
+    assert backend._artifacts(42, ["obj"])["obj"]["href"] == (
+        "https://api.example.test/proxy/api/v1/reconstruction/42/export/obj"
+    )
+    assert ReferenceBackend().artifact_base_url == "http://localhost:8000"
+
+
 @pytest.mark.parametrize("process_id", CONTRACTS)
 def test_examples_and_published_schemas(service, process_id):
     client, _, _ = service

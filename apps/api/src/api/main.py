@@ -1,5 +1,7 @@
 """Reference FastAPI service for the reusable OGC protocol layer."""
 
+import os
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from ogc_processes.router import create_app
@@ -13,7 +15,11 @@ from api.reference_backend import (
 )
 
 catalog = ReferenceCatalog()
-backend = ReferenceBackend()
+backend = ReferenceBackend(
+    artifact_base_url=os.getenv(
+        "ROOFER_PROCESSES_PUBLIC_BASE_URL", "http://localhost:8000"
+    )
+)
 store = ReferenceJobStore()
 
 app = FastAPI(title="Roofer Online Processes", version="0.1.0")
