@@ -1,6 +1,8 @@
 """Reference FastAPI service for the reusable OGC protocol layer."""
 
 import os
+from copy import deepcopy
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
@@ -23,16 +25,27 @@ backend = ReferenceBackend(
 store = ReferenceJobStore()
 
 app = FastAPI(title="Roofer Online Processes", version="0.1.0")
-app.mount(
-    "/ogcapi",
-    create_app(
-        validator=RooferContractValidator(),
-        catalog=catalog,
-        backend=backend,
-        store=store,
-        authenticator=ReferenceAuthenticator(),
-    ),
+ogc_app = create_app(
+    validator=RooferContractValidator(),
+    catalog=catalog,
+    backend=backend,
+    store=store,
+    authenticator=ReferenceAuthenticator(),
 )
+app.mount("/ogcapi", ogc_app)
+
+
+def openapi_with_mounted_paths() -> dict[str, Any]:
+    """Expose the mounted OGC API routes in the parent Swagger document."""
+    schema = deepcopy(ogc_app.openapi())
+    schema["paths"] = {
+        f"/ogcapi{path}": path_item
+        for path, path_item in schema.get("paths", {}).items()
+    }
+    return schema
+
+
+app.openapi = openapi_with_mounted_paths  # type: ignore[method-assign]
 
 
 @app.get("/")
