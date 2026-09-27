@@ -32,13 +32,21 @@ from ogc_processes.models import (
     StatusCode,
 )
 
-CONFORMANCE_CORE = "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/core"
-CONFORMANCE_JSON = "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/json"
+CONFORMANCE_CORE = (
+    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/core",
+    "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/core",
+)
+CONFORMANCE_JSON = (
+    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/json",
+    "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/json",
+)
 CONFORMANCE_PROCESS_DESCRIPTION = (
-    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/ogc-process-description"
+    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/ogc-process-description",
+    "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/ogc-process-description",
 )
 CONFORMANCE_JOB_LIST = (
-    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/job-list"
+    "http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/job-list",
+    "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/job-list",
 )
 PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
     400: {"model": ExceptionReport},

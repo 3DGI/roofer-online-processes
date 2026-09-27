@@ -18,10 +18,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
-
-OGC_API_URL = os.environ.get("OGC_API_URL", "http://localhost:8000/ogcapi").rstrip(
-    "/"
-)
+OGC_API_URL = os.environ.get("OGC_API_URL", "http://localhost:8000/ogcapi").rstrip("/")
 SUBJECT = "ogcapi-e2e-example"
 HEADERS = {"Authorization": f"Bearer {SUBJECT}"}
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -155,14 +152,10 @@ class OGCAPIEndToEnd(unittest.TestCase):
         self.assertEqual(completed["id"], reconstruction["id"])
         job = self.get_json(f"jobs/{reconstruction['id']}")
         self.assertEqual(job["status"], "successful")
-        reconstruction_results = self.get_json(
-            f"jobs/{reconstruction['id']}/results"
-        )
+        reconstruction_results = self.get_json(f"jobs/{reconstruction['id']}/results")
         output_id = "building_model"
         self.assertIn(output_id, reconstruction_results["outputs"])
-        item = self.get_json(
-            f"jobs/{reconstruction['id']}/results/{output_id}/0"
-        )
+        item = self.get_json(f"jobs/{reconstruction['id']}/results/{output_id}/0")
         self.assertEqual(item, reconstruction_results["outputs"][output_id])
 
         # Convert the fixture model asynchronously and select its result output.
@@ -178,9 +171,7 @@ class OGCAPIEndToEnd(unittest.TestCase):
         conversion_item = self.get_json(
             f"jobs/{conversion['id']}/results/converted_model/0"
         )
-        self.assertEqual(
-            conversion_item, selected["outputs"]["converted_model"]
-        )
+        self.assertEqual(conversion_item, selected["outputs"]["converted_model"])
 
         jobs = self.get_json("jobs")["jobs"]
         listed_ids = {job["id"] for job in jobs}
