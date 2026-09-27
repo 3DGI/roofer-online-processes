@@ -53,6 +53,8 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
     404: {"model": ExceptionReport},
     500: {"model": ExceptionReport},
 }
+REL_CONFORMANCE = "http://www.opengis.net/def/rel/ogc/1.0/conformance"
+REL_PROCESSES = "http://www.opengis.net/def/rel/ogc/1.0/processes"
 
 
 def root_url(request: Request) -> str:
@@ -231,11 +233,13 @@ def create_app(
                 ),
                 Link(
                     href=f"{root}/conformance",
-                    rel="conformance",
+                    rel=REL_CONFORMANCE,
                     type="application/json",
                 ),
                 Link(
-                    href=f"{root}/processes", rel="processes", type="application/json"
+                    href=f"{root}/processes",
+                    rel=REL_PROCESSES,
+                    type="application/json",
                 ),
                 Link(href=f"{root}/jobs", rel="jobs", type="application/json"),
             ],
