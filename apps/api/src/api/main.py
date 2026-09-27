@@ -36,11 +36,15 @@ app.mount(
 
 
 @app.get("/")
-def root() -> dict[str, object]:
+def root(request: Request) -> dict[str, object]:
+    public_root = str(request.base_url).rstrip("/")
+    root_path = request.scope.get("root_path", "").rstrip("/")
+    if root_path and not public_root.endswith(root_path):
+        public_root += root_path
     return {
         "service": "roofer-online-processes",
-        "docs": "/docs",
-        "links": [{"rel": "ogcapi", "href": "/ogcapi/"}],
+        "docs": f"{public_root}/docs",
+        "links": [{"rel": "ogcapi", "href": f"{public_root}/ogcapi/"}],
     }
 
 
