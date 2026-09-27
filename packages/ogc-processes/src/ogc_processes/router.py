@@ -249,10 +249,10 @@ def create_app(
     def conformance() -> Conformance:
         return Conformance(
             conformsTo=[
-                CONFORMANCE_CORE,
-                CONFORMANCE_JSON,
-                CONFORMANCE_PROCESS_DESCRIPTION,
-                CONFORMANCE_JOB_LIST,
+                *CONFORMANCE_CORE,
+                *CONFORMANCE_JSON,
+                *CONFORMANCE_PROCESS_DESCRIPTION,
+                *CONFORMANCE_JOB_LIST,
             ]
         )
 
