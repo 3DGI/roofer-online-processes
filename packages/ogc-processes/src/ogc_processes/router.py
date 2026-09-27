@@ -218,7 +218,12 @@ def create_app(
             raise HTTPException(status_code=404, detail="Results are not available.")
         return job
 
-    @app.get("/", response_model=LandingPage, responses=PROBLEM_RESPONSES)
+    @app.get(
+        "/",
+        response_model=LandingPage,
+        response_model_exclude_none=True,
+        responses=PROBLEM_RESPONSES,
+    )
     def landing(request: Request) -> LandingPage:
         root = root_url(request)
         return LandingPage(
