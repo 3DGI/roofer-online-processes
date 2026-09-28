@@ -91,7 +91,7 @@ def test_reconstruction_input_schemas_only_include_referenced_definitions():
     for name in ["point_cloud_ids", "name", "config"]:
         assert not definitions.intersection(description.inputs[name].schema_.get("$defs", {}))
 
-    bag_schema = description.inputs["bag"].schema_["properties"]["bag"]
+    bag_schema = description.inputs["bag"].schema_
     assert definitions.issubset(bag_schema["$defs"])
     validator = Draft202012Validator(bag_schema)
     for selector in [
@@ -103,7 +103,7 @@ def test_reconstruction_input_schemas_only_include_referenced_definitions():
             "crs": "EPSG:28992",
         },
     ]:
-        validator.validate(selector)
+        validator.validate({"bag": selector})
 
 
 INVALID = [
