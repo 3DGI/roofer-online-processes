@@ -274,12 +274,24 @@ def create_app(
     @app.get(
         "/processes/{process_id}",
         response_model=ProcessDescription,
+        response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
     )
-    def get_process(process_id: str) -> ProcessDescription:
+    def get_process(request: Request, process_id: str) -> ProcessDescription:
         process = catalog.get_process(process_id)
         if process is None:
             raise HTTPException(status_code=404, detail="Process not found.")
+        root = root_url(request)
+        href = f"{root}/processes/{process_id}"
+        process.links = [
+            Link(href=href, rel="self", type="application/json"),
+            Link(href=f"{root}/processes", rel="alternate", type="application/json"),
+            Link(
+                href="https://www.opengis.net/def/profile/OGC/0/ogc-process-description",
+                rel="profile",
+                type="application/json",
+            ),
+        ]
         return process
 
     @app.post(

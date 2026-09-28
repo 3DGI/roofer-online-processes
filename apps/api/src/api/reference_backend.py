@@ -94,8 +94,16 @@ class ReferenceCatalog:
                     inputs={
                         name: InputDescription(
                             title=name,
-                            schema=field
-                            | {"$defs": referenced_definitions(field, definitions)},
+                            schema={
+                                "type": "object",
+                                "properties": {
+                                    name: field
+                                    | {"$defs": referenced_definitions(field, definitions)}
+                                },
+                                "required": [name]
+                                if name in schema.get("required", [])
+                                else [],
+                            },
                             minOccurs=1 if name in schema.get("required", []) else 0,
                             maxOccurs=1,
                         )
@@ -104,7 +112,17 @@ class ReferenceCatalog:
                     outputs={
                         contract.output_name: OutputDescription(
                             title=contract.output_name,
-                            schema=contract.output.model_json_schema(),
+                            schema={
+                                "type": "object",
+                                "properties": contract.output.model_json_schema().get(
+                                    "properties", {}
+                                ),
+                                **{
+                                    key: value
+                                    for key, value in contract.output.model_json_schema().items()
+                                    if key != "properties"
+                                },
+                            },
                         )
                     },
                     jobControlOptions=[
