@@ -27,32 +27,23 @@ class ContractModel(BaseModel):
 
 
 def unique(values: list[Any]) -> list[Any]:
-    keys = [
-        json.dumps(value, sort_keys=True) if isinstance(value, dict) else value
-        for value in values
-    ]
+    keys = [json.dumps(value, sort_keys=True) if isinstance(value, dict) else value for value in values]
     if len(set(keys)) != len(keys):
         raise ValueError("Duplicate entries are not permitted")
     return values
 
 
-class UploadSource(ContractModel):
-    kind: Literal["upload"]
-    upload_url: Nonblank
-
-    @field_validator("upload_url")
-    @classmethod
-    def http_url(cls, value: str) -> str:
-        parts = urlsplit(value)
-        if (
-            parts.scheme not in {"http", "https"}
-            or not parts.hostname
-            or parts.username
-            or parts.password
-            or parts.fragment
-        ):
-            raise ValueError("An HTTP(S) URL without embedded credentials is required")
-        return value
+def validate_http_url(value: str) -> str:
+    parts = urlsplit(value)
+    if (
+        parts.scheme not in {"http", "https"}
+        or not parts.hostname
+        or parts.username
+        or parts.password
+        or parts.fragment
+    ):
+        raise ValueError("An HTTP(S) URL without embedded credentials is required")
+    return value
 
 
 class AssetSource(ContractModel):
@@ -68,18 +59,11 @@ class RemoteSource(ContractModel):
     @field_validator("url")
     @classmethod
     def http_url(cls, value: str) -> str:
-        return UploadSource.http_url(value)
-
-
-Source = Annotated[
-    UploadSource | AssetSource | RemoteSource, Field(discriminator="kind")
-]
+        return validate_http_url(value)
 
 
 class PreparationInputs(ContractModel):
-    point_clouds: Annotated[
-        list[Source], Field(min_length=1, json_schema_extra={"uniqueItems": True})
-    ]
+    point_clouds: Annotated[list[RemoteSource], Field(min_length=1, json_schema_extra={"uniqueItems": True})]
 
     @field_validator("point_clouds")
     @classmethod
@@ -94,9 +78,7 @@ class BAGAsset(AssetSource):
 
 class BAGBuildings(ContractModel):
     kind: Literal["buildings"]
-    building_ids: Annotated[
-        list[Nonblank], Field(min_length=1, json_schema_extra={"uniqueItems": True})
-    ]
+    building_ids: Annotated[list[Nonblank], Field(min_length=1, json_schema_extra={"uniqueItems": True})]
     _unique = field_validator("building_ids")(unique)
 
 
@@ -120,9 +102,7 @@ class BAGArea(ContractModel):
 
 
 BAGSelector = Annotated[BAGAsset | BAGBuildings | BAGArea, Field(discriminator="kind")]
-IDList = Annotated[
-    list[PositiveID], Field(min_length=1, json_schema_extra={"uniqueItems": True})
-]
+IDList = Annotated[list[PositiveID], Field(min_length=1, json_schema_extra={"uniqueItems": True})]
 
 
 class ReconstructionInputs(ContractModel):
@@ -141,9 +121,7 @@ class ReconstructionInputs(ContractModel):
 
 class ConversionInputs(ContractModel):
     model_3d_id: PositiveID
-    formats: Annotated[
-        list[Format], Field(min_length=1, json_schema_extra={"uniqueItems": True})
-    ]
+    formats: Annotated[list[Format], Field(min_length=1, json_schema_extra={"uniqueItems": True})]
     _unique = field_validator("formats")(unique)
 
 
@@ -155,9 +133,7 @@ class ExportInputs(ContractModel):
             "anyOf": [
                 {
                     "required": ["sharedProfileId"],
-                    "properties": {
-                        "sharedProfileId": {"type": "string", "pattern": r"\S"}
-                    },
+                    "properties": {"sharedProfileId": {"type": "string", "pattern": r"\S"}},
                 },
                 {
                     "required": ["host", "port", "database", "user", "password"],
@@ -188,8 +164,7 @@ class ExportInputs(ContractModel):
     @model_validator(mode="after")
     def connection(self) -> Self:
         if self.sharedProfileId is None and any(
-            value is None
-            for value in [self.host, self.port, self.database, self.user, self.password]
+            value is None for value in [self.host, self.port, self.database, self.user, self.password]
         ):
             raise ValueError("A profile or complete connection is required")
         return self
@@ -202,7 +177,7 @@ class Artifact(ContractModel):
     @field_validator("href")
     @classmethod
     def http_url(cls, value: str) -> str:
-        return UploadSource.http_url(value)
+        return validate_http_url(value)
 
 
 class PointCloudOutcome(ContractModel):
@@ -219,9 +194,7 @@ class PointCloudOutcome(ContractModel):
 
     @model_validator(mode="after")
     def consistent(self) -> Self:
-        if self.ready != (self.outcome == "ready") or (
-            self.ready and self.point_cloud_id is None
-        ):
+        if self.ready != (self.outcome == "ready") or (self.ready and self.point_cloud_id is None):
             raise ValueError("Inconsistent readiness")
         if self.bounds is not None and len(self.bounds) not in {4, 6}:
             raise ValueError("Bounds require four or six numbers")
@@ -250,9 +223,7 @@ class ConvertedModel(ContractModel):
 
 class BuildingModel(ConvertedModel):
     bag_id: PositiveID
-    building_ids: Annotated[
-        list[Nonblank], Field(min_length=1, json_schema_extra={"uniqueItems": True})
-    ]
+    building_ids: Annotated[list[Nonblank], Field(min_length=1, json_schema_extra={"uniqueItems": True})]
     bag_dataset_date: str | None = None
     name: Nonblank | None = None
 
@@ -287,11 +258,6 @@ CONTRACTS = {
         ValidationReport,
         {
             "point_clouds": [
-                {
-                    "kind": "upload",
-                    "upload_url": "https://roofer.example/api/v1/pointcloud/upload/123",
-                },
-                {"kind": "asset", "asset_id": 124},
                 {"kind": "url", "url": "https://data.example/survey.laz"},
             ]
         },
@@ -323,9 +289,7 @@ CONTRACTS = {
 
 
 class RooferContractValidator:
-    def validate_inputs(
-        self, process_id: str, inputs: dict[str, Any]
-    ) -> dict[str, Any]:
+    def validate_inputs(self, process_id: str, inputs: dict[str, Any]) -> dict[str, Any]:
         try:
             normalized = (
                 CONTRACTS[process_id]
@@ -352,15 +316,7 @@ class RooferContractValidator:
         if set(results.outputs) != {contract.output_name}:
             raise ContractViolation("Invalid backend results.")
         try:
-            output = contract.output.model_validate(
-                results.outputs[contract.output_name]
-            )
+            output = contract.output.model_validate(results.outputs[contract.output_name])
         except (ValidationError, ValueError, TypeError) as exc:
             raise ContractViolation("Invalid backend results.") from exc
-        return Results(
-            outputs={
-                contract.output_name: output.model_dump(
-                    mode="json", by_alias=True, exclude_none=True
-                )
-            }
-        )
+        return Results(outputs={contract.output_name: output.model_dump(mode="json", by_alias=True, exclude_none=True)})

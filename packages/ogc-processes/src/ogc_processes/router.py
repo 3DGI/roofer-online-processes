@@ -75,19 +75,11 @@ def _normalize_openapi_30(node: Any) -> None:
         any_of = node.get("anyOf")
         if isinstance(any_of, list) and len(any_of) == 2:
             nullable = next(
-                (
-                    item
-                    for item in any_of
-                    if isinstance(item, dict) and item.get("type") == "null"
-                ),
+                (item for item in any_of if isinstance(item, dict) and item.get("type") == "null"),
                 None,
             )
             non_null = next(
-                (
-                    item
-                    for item in any_of
-                    if isinstance(item, dict) and item.get("type") != "null"
-                ),
+                (item for item in any_of if isinstance(item, dict) and item.get("type") != "null"),
                 None,
             )
             if nullable is not None and non_null is not None:
@@ -147,42 +139,28 @@ def create_app(
     app.openapi = openapi_30  # type: ignore[method-assign]
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_problem(
-        request: Request, exc: StarletteHTTPException
-    ) -> JSONResponse:
-        detail = (
-            exc.detail
-            if isinstance(exc.detail, str)
-            else "Request could not be completed."
-        )
+    async def http_problem(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        detail = exc.detail if isinstance(exc.detail, str) else "Request could not be completed."
         return problem_response(request, exc.status_code, detail)
 
     @app.exception_handler(RequestValidationError)
-    async def validation_problem(
-        request: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def validation_problem(request: Request, exc: RequestValidationError) -> JSONResponse:
         del exc
         return problem_response(request, 400, "Request validation failed.")
 
     @app.exception_handler(ContractViolation)
-    async def contract_problem(
-        request: Request, exc: ContractViolation
-    ) -> JSONResponse:
+    async def contract_problem(request: Request, exc: ContractViolation) -> JSONResponse:
         del exc
         return problem_response(request, 400, "Process input validation failed.")
 
     def validated_results(process_id: str, upstream_id: str, owner: str) -> Results:
         results = backend.results(upstream_id, owner)
         if results is None:
-            raise HTTPException(
-                status_code=500, detail="Execution returned no results."
-            )
+            raise HTTPException(status_code=500, detail="Execution returned no results.")
         try:
             return validator.validate_results(process_id, results)
         except ContractViolation as exc:
-            raise HTTPException(
-                status_code=500, detail="Invalid backend results."
-            ) from exc
+            raise HTTPException(status_code=500, detail="Invalid backend results.") from exc
 
     def subject(request: Request) -> str:
         return authenticator.authenticate(request.headers.get("authorization")).subject
@@ -203,9 +181,7 @@ def create_app(
         if stored is None:
             raise HTTPException(status_code=404, detail="Job not found.")
         job, upstream_id = stored
-        job.status, job.message, job.progress, job.started, job.finished = (
-            backend.status(upstream_id, owner)
-        )
+        job.status, job.message, job.progress, job.started, job.finished = backend.status(upstream_id, owner)
         job.updated = datetime.now(UTC)
         store.update(job)
         return job
@@ -262,9 +238,7 @@ def create_app(
         )
 
     @app.get("/processes", response_model=ProcessList, responses=PROBLEM_RESPONSES)
-    def list_processes(
-        request: Request, limit: Annotated[int, Query(ge=1, le=1000)] = 10
-    ) -> ProcessList:
+    def list_processes(request: Request, limit: Annotated[int, Query(ge=1, le=1000)] = 10) -> ProcessList:
         root = root_url(request)
         return ProcessList(
             processes=catalog.list_processes()[:limit],
@@ -303,17 +277,13 @@ def create_app(
             **PROBLEM_RESPONSES,
         },
     )
-    def execute(
-        request: Request, process_id: str, payload: ExecuteRequest
-    ) -> JSONResponse | Results:
+    def execute(request: Request, process_id: str, payload: ExecuteRequest) -> JSONResponse | Results:
         process = catalog.get_process(process_id)
         if process is None:
             raise HTTPException(status_code=404, detail="Process not found.")
         mode = execution_mode(request.headers.get("prefer"))
         if mode not in process.jobControlOptions:
-            raise HTTPException(
-                status_code=400, detail="Requested execution mode is unavailable."
-            )
+            raise HTTPException(status_code=400, detail="Requested execution mode is unavailable.")
         owner = subject(request)
         inputs = validator.validate_inputs(process_id, payload.inputs)
         submission = backend.submit(process_id, inputs, owner, mode)
@@ -326,9 +296,7 @@ def create_app(
             status=submission.status,
             message=submission.message,
             created=now,
-            finished=now
-            if submission.status in {StatusCode.successful, StatusCode.failed}
-            else None,
+            finished=now if submission.status in {StatusCode.successful, StatusCode.failed} else None,
             updated=now,
             progress=100 if submission.status == StatusCode.successful else 0,
             links=job_links(request, job_id),
@@ -357,17 +325,9 @@ def create_app(
         limit: Annotated[int, Query(ge=1, le=1000)] = 10,
     ) -> JobList:
         if type is not None and any(item != "ogc-api-processes" for item in type):
-            raise HTTPException(
-                status_code=400, detail="Unsupported processing entity type."
-            )
-        if (
-            minDuration is not None
-            and maxDuration is not None
-            and minDuration > maxDuration
-        ):
-            raise HTTPException(
-                status_code=400, detail="minDuration must not exceed maxDuration."
-            )
+            raise HTTPException(status_code=400, detail="Unsupported processing entity type.")
+        if minDuration is not None and maxDuration is not None and minDuration > maxDuration:
+            raise HTTPException(status_code=400, detail="minDuration must not exceed maxDuration.")
         owner = subject(request)
         jobs = [refreshed_job(request, job.id, owner) for job, _ in store.list(owner)]
         jobs = filter_jobs(jobs, processID, status, datetime_, minDuration, maxDuration)
@@ -386,9 +346,7 @@ def create_app(
     def get_job(request: Request, job_id: str) -> JobStatus:
         return refreshed_job(request, job_id, subject(request))
 
-    @app.get(
-        "/jobs/{job_id}/results", response_model=Results, responses=PROBLEM_RESPONSES
-    )
+    @app.get("/jobs/{job_id}/results", response_model=Results, responses=PROBLEM_RESPONSES)
     def get_results(
         request: Request,
         job_id: str,
@@ -428,9 +386,7 @@ def create_app(
         stored = store.get(job.id, owner)
         if stored is None:
             raise HTTPException(status_code=404, detail="Job not found.")
-        output = validated_results(job.processID, stored[1], owner).outputs.get(
-            output_id
-        )
+        output = validated_results(job.processID, stored[1], owner).outputs.get(output_id)
         if output is None:
             raise HTTPException(status_code=404, detail="Output is not available.")
         return output
@@ -440,9 +396,7 @@ def create_app(
 
 def problem_response(request: Request, status_code: int, detail: str) -> JSONResponse:
     """Return an RFC 7807 response for protocol and validation errors."""
-    title = {400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(
-        status_code, "Error"
-    )
+    title = {400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(status_code, "Error")
     report = ExceptionReport(
         type="about:blank",
         title=title,
@@ -468,18 +422,10 @@ def select_outputs(results: Results, requested: list[str] | None) -> Results:
     """Validate and select comma-separated output identifiers."""
     if requested is None:
         return Results(outputs=results.outputs.copy())
-    output_ids = [
-        output_id for value in requested for output_id in value.split(",") if output_id
-    ]
-    if not output_ids or any(
-        output_id not in results.outputs for output_id in output_ids
-    ):
-        raise HTTPException(
-            status_code=400, detail="Requested output is not available."
-        )
-    return Results(
-        outputs={output_id: results.outputs[output_id] for output_id in output_ids}
-    )
+    output_ids = [output_id for value in requested for output_id in value.split(",") if output_id]
+    if not output_ids or any(output_id not in results.outputs for output_id in output_ids):
+        raise HTTPException(status_code=400, detail="Requested output is not available.")
+    return Results(outputs={output_id: results.outputs[output_id] for output_id in output_ids})
 
 
 def filter_jobs(
@@ -491,12 +437,8 @@ def filter_jobs(
     maximum: int | None,
 ) -> list[JobStatus]:
     """Apply the Job List filters supported by the reference store."""
-    filtered = [
-        job for job in jobs if process_id is None or job.processID in process_id
-    ]
-    filtered = [
-        job for job in filtered if job_status is None or job.status in job_status
-    ]
+    filtered = [job for job in jobs if process_id is None or job.processID in process_id]
+    filtered = [job for job in filtered if job_status is None or job.status in job_status]
     if datetime_filter is not None:
         filtered = [job for job in filtered if datetime_matches(job, datetime_filter)]
     if minimum is not None or maximum is not None:
@@ -510,9 +452,7 @@ def datetime_matches(job: JobStatus, value: str) -> bool:
         start_text, end_text = value.split("/", maxsplit=1)
         start = parse_datetime(start_text) if start_text != ".." else None
         end = parse_datetime(end_text) if end_text != ".." else None
-        return (start is None or job.created >= start) and (
-            end is None or job.created <= end
-        )
+        return (start is None or job.created >= start) and (end is None or job.created <= end)
     instant = parse_datetime(value)
     return instant is not None and job.created == instant
 
@@ -532,6 +472,4 @@ def duration_matches(job: JobStatus, minimum: int | None, maximum: int | None) -
     if job.started is None or job.finished is None:
         return False
     elapsed = (job.finished - job.started).total_seconds()
-    return (minimum is None or elapsed >= minimum) and (
-        maximum is None or elapsed <= maximum
-    )
+    return (minimum is None or elapsed >= minimum) and (maximum is None or elapsed <= maximum)
