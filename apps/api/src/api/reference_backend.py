@@ -73,6 +73,30 @@ class ReferenceAuthenticator:
 class ReferenceCatalog:
     def __init__(self) -> None:
         self._processes = []
+        self._processes.append(
+            ProcessDescription(
+                id="echo",
+                title="Echo",
+                description="Return the supplied value as a process output.",
+                version="1.0.0",
+                inputs={
+                    "value": InputDescription(
+                        title="value",
+                        schema={"type": "object", "properties": {"value": {"type": "string"}}},
+                        minOccurs=1,
+                        maxOccurs=1,
+                    )
+                },
+                outputs={
+                    "value": OutputDescription(
+                        title="value",
+                        schema={"type": "object", "properties": {"value": {"type": "string"}}},
+                    )
+                },
+                jobControlOptions=[JobControlOption.execute_async, JobControlOption.execute_sync],
+                outputTransmission=[TransmissionMode.value],
+            )
+        )
         for process_id, contract in CONTRACTS.items():
             # Keep this proposal process off the public catalog until it is ready.
             if process_id == "roofer:export_to_3dcitydb:v1":
