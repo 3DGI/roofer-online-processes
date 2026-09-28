@@ -1,4 +1,3 @@
-import json
 from unittest.mock import patch
 
 import pytest
@@ -13,6 +12,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
+from ogc_processes.interfaces import ContractViolation
 from ogc_processes.models import Results
 from ogc_processes.router import create_app
 
@@ -64,7 +64,10 @@ def test_artifact_urls_use_configured_public_base_url() -> None:
     assert ReferenceBackend().artifact_base_url == "http://localhost:8000"
 
 
-@pytest.mark.parametrize("process_id", CONTRACTS)
+PUBLISHED_CONTRACTS = [process_id for process_id in CONTRACTS if not process_id.endswith("export_to_3dcitydb:v1")]
+
+
+@pytest.mark.parametrize("process_id", PUBLISHED_CONTRACTS)
 def test_examples_and_published_schemas(service, process_id):
     client, _, _ = service
     contract = CONTRACTS[process_id]
@@ -73,7 +76,7 @@ def test_examples_and_published_schemas(service, process_id):
     Draft202012Validator(description["inputsSchema"]).validate(contract.example)
     contract.inputs.model_validate(contract.example)
     for name, value in contract.example.items():
-        Draft202012Validator(description["inputs"][name]["schema"]).validate(value)
+        Draft202012Validator(description["inputs"][name]["schema"]).validate({name: value})
     response = execute(client, process_id.split(":")[1], contract.example)
     assert response.status_code == 200, response.text
     output = response.json()["outputs"][contract.output_name]
@@ -89,7 +92,7 @@ def test_reconstruction_input_schemas_only_include_referenced_definitions():
     for name in ["point_cloud_ids", "name", "config"]:
         assert not definitions.intersection(description.inputs[name].schema_.get("$defs", {}))
 
-    bag_schema = description.inputs["bag"].schema_
+    bag_schema = description.inputs["bag"].schema_["properties"]["bag"]
     assert definitions.issubset(bag_schema["$defs"])
     validator = Draft202012Validator(bag_schema)
     for selector in [
@@ -256,11 +259,11 @@ def test_retrieval_artifacts_and_bad_backend(service):
         assert response.status_code == 500 and "secret" not in response.text
     original = backend.results
     backend.results = lambda *args: Results(outputs={"converted_model": {"password": "secret"}})
-    assert execute(client, "convert_format", {"model_3d_id": 789, "formats": ["obj"]}).status_code == 500
+    assert execute(client, "convert_format", {"model_3d_id": 789, "formats": ["gpkg"]}).status_code == 500
     backend.results = original
 
 
-def test_citydb_defaults_precedence_and_schema(service):
+def test_unpublished_citydb_contract_defaults_precedence_and_schema(service):
     client, _, _ = service
     validator = RooferContractValidator()
     process = "roofer:export_to_3dcitydb:v1"
@@ -277,6 +280,9 @@ def test_citydb_defaults_precedence_and_schema(service):
     assert normalized["useSSL"] is False and normalized["importMode"] == "import_all"
     profile = validator.validate_inputs(process, explicit | {"sharedProfileId": "profile"})
     assert not set(explicit.keys() - {"model_3d_id"}) & set(profile)
+    schema = CONTRACTS[process].inputs.model_json_schema(by_alias=True)
+    Draft202012Validator.check_schema(schema)
+    assert list(Draft202012Validator(schema).iter_errors({"model_3d_id": 789}))
     for inputs in [
         {"model_3d_id": 789},
         explicit | {"port": True},
@@ -284,12 +290,10 @@ def test_citydb_defaults_precedence_and_schema(service):
         explicit | {"importMode": "invalid"},
         explicit | {"unknown": "secret"},
     ]:
-        response = execute(client, "export_to_3dcitydb", inputs)
-        assert response.status_code == 400 and "secret" not in response.text
-    schema = client.get(f"/ogcapi/processes/{process}").json()["inputsSchema"]
-    assert list(Draft202012Validator(schema).iter_errors({"model_3d_id": 789}))
-    receipt = execute(client, "export_to_3dcitydb", explicit).json()
-    assert "secret" not in json.dumps(receipt) and "db.example" not in json.dumps(receipt)
+        with pytest.raises(ContractViolation):
+            validator.validate_inputs(process, inputs)
+    assert client.get(f"/ogcapi/processes/{process}").status_code == 404
+    assert execute(client, "export_to_3dcitydb", explicit).status_code == 404
 
 
 @pytest.mark.parametrize(
