@@ -3,15 +3,15 @@
 This folder runs the OGC CITE Executable Test Suite (ETS) for OGC API - Processes
 Part 1 (1.0) in the official `ogccite/ets-ogcapi-processes10` container. The
 GitHub Actions job starts this API checkout on the runner, starts TEAM Engine
-with host networking, then submits an ETS run through TEAM Engine's REST API.
+on a bridge network, then submits an ETS run through TEAM Engine's REST API.
 The IUT URL is therefore the just-started API, not the staging deployment.
 
 The runner expects Docker, Python, and the API dependencies to be available. For
-a local run, start the API on port 8000 and the ETS container on the host network:
+a local run, start the API on port 8000 and publish TEAM Engine's web port:
 
 ```sh
-docker run --network host --detach --name ogc-processes-ets ogccite/ets-ogcapi-processes10
-python docker/ets-ogcapi-processes/run_ets.py
+docker run --add-host=host.docker.internal:host-gateway --publish 8080:8080 --detach --name ogc-processes-ets ogccite/ets-ogcapi-processes10
+OGC_IUT_URL=http://host.docker.internal:8000/ogcapi/ python docker/ets-ogcapi-processes/run_ets.py
 docker rm --force ogc-processes-ets
 ```
 
