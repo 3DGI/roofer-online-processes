@@ -45,6 +45,8 @@ class Link(BaseModel):
     type: str | None = None
     title: str | None = None
 
+    model_config = {"exclude_none": True}
+
 
 class LandingPage(BaseModel):
     """OGC API landing page."""
@@ -122,6 +124,8 @@ class JobStatus(BaseModel):
     """OGC API Processes 2.0 job resource."""
 
     id: str
+    jobID: str
+    type: Literal["process"] = "process"
     processID: str = Field(json_schema_extra={"format": "uri"})
     processingEntityType: Literal["ogc-api-processes"]
     status: StatusCode
@@ -149,10 +153,7 @@ class Results(BaseModel):
 
 
 class ExceptionReport(BaseModel):
-    """RFC 7807 problem details response."""
+    """OGC API 1.0 exception response."""
 
-    type: str
-    title: str
-    status: int
-    detail: str | None = None
-    instance: str | None = None
+    code: str
+    description: str

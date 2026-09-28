@@ -55,6 +55,7 @@ PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
 }
 REL_CONFORMANCE = "http://www.opengis.net/def/rel/ogc/1.0/conformance"
 REL_PROCESSES = "http://www.opengis.net/def/rel/ogc/1.0/processes"
+REL_RESULTS = "http://www.opengis.net/def/rel/ogc/1.0/results"
 
 
 def root_url(request: Request) -> str:
@@ -171,7 +172,7 @@ def create_app(
             Link(href=f"{root}/jobs/{job_id}", rel="self", type="application/json"),
             Link(
                 href=f"{root}/jobs/{job_id}/results",
-                rel="results",
+                rel=REL_RESULTS,
                 type="application/json",
             ),
         ]
@@ -296,6 +297,7 @@ def create_app(
         job_id = str(uuid4())
         job = JobStatus(
             id=job_id,
+            jobID=job_id,
             processID=process_id,
             processingEntityType="ogc-api-processes",
             status=submission.status,
@@ -308,14 +310,19 @@ def create_app(
         )
         store.create(job, submission.upstream_id, owner)
         if mode == JobControlOption.execute_sync:
-            return validated_results(process_id, submission.upstream_id, owner)
+            results = validated_results(process_id, submission.upstream_id, owner)
+            if payload.response == "raw":
+                if len(results.outputs) != 1:
+                    raise HTTPException(status_code=400, detail="Raw response requires exactly one output.")
+                return JSONResponse(content=next(iter(results.outputs.values())))
+            return results
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             headers={
                 "Location": f"{root_url(request)}/jobs/{job_id}",
                 "Preference-Applied": "respond-async",
             },
-            content=job.model_dump(mode="json"),
+            content=job.model_dump(mode="json", exclude_none=True),
         )
 
     @app.get(
@@ -334,7 +341,7 @@ def create_app(
         maxDuration: Annotated[int | None, Query(ge=0)] = None,
         limit: Annotated[int, Query(ge=1, le=1000)] = 10,
     ) -> JobList:
-        if type is not None and any(item != "ogc-api-processes" for item in type):
+        if type is not None and any(item not in {"process", "ogc-api-processes"} for item in type):
             raise HTTPException(status_code=400, detail="Unsupported processing entity type.")
         if minDuration is not None and maxDuration is not None and minDuration > maxDuration:
             raise HTTPException(status_code=400, detail="minDuration must not exceed maxDuration.")
@@ -405,27 +412,25 @@ def create_app(
 
 
 def problem_response(request: Request, status_code: int, detail: str) -> JSONResponse:
-    """Return an RFC 7807 response for protocol and validation errors."""
-    title = {400: "Bad Request", 404: "Not Found", 500: "Internal Server Error"}.get(status_code, "Error")
+    """Return an OGC API 1.0 exception response."""
+    del request
     report = ExceptionReport(
-        type="about:blank",
-        title=title,
-        status=status_code,
-        detail=detail,
-        instance=str(request.url),
+        code={400: "BadRequest", 404: "NotFound", 500: "InternalServerError"}.get(status_code, "Error"),
+        description=detail,
     )
     return JSONResponse(
         status_code=status_code,
         media_type="application/json",
-        content=report.model_dump(),
+        content=report.model_dump(exclude_none=True),
     )
 
 
 def execution_mode(prefer: str | None) -> JobControlOption:
     """Negotiate execution mode from the RFC 7240 Prefer header."""
-    if prefer is not None and "respond-sync" in prefer:
-        return JobControlOption.execute_sync
-    return JobControlOption.execute_async
+    directives = {directive.strip().split("=", 1)[0] for directive in (prefer or "").split(",")}
+    if "respond-async" in directives:
+        return JobControlOption.execute_async
+    return JobControlOption.execute_sync
 
 
 def select_outputs(results: Results, requested: list[str] | None) -> Results:
