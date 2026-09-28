@@ -23,6 +23,39 @@ from shapely.geometry import box
 from api.process_contracts import CONTRACTS
 
 
+def referenced_definitions(
+    schema: dict[str, Any], definitions: dict[str, Any]
+) -> dict[str, Any]:
+    """Return definitions referenced by a schema, including their dependencies."""
+    pending = list(_definition_references(schema))
+    selected: dict[str, Any] = {}
+
+    while pending:
+        name = pending.pop()
+        if name in selected or name not in definitions:
+            continue
+        definition = definitions[name]
+        selected[name] = definition
+        pending.extend(_definition_references(definition))
+
+    return selected
+
+
+def _definition_references(value: Any) -> set[str]:
+    references: set[str] = set()
+    if isinstance(value, dict):
+        reference = value.get("$ref")
+        if isinstance(reference, str) and reference.startswith("#/$defs/"):
+            name = reference.removeprefix("#/$defs/")
+            references.add(name.replace("~1", "/").replace("~0", "~"))
+        for child in value.values():
+            references.update(_definition_references(child))
+    elif isinstance(value, list):
+        for child in value:
+            references.update(_definition_references(child))
+    return references
+
+
 @dataclass(frozen=True)
 class ReferencePrincipal:
     subject: str
@@ -61,7 +94,8 @@ class ReferenceCatalog:
                     inputs={
                         name: InputDescription(
                             title=name,
-                            schema=field | {"$defs": definitions},
+                            schema=field
+                            | {"$defs": referenced_definitions(field, definitions)},
                             minOccurs=1 if name in schema.get("required", []) else 0,
                             maxOccurs=1,
                         )

@@ -86,6 +86,31 @@ def test_examples_and_published_schemas(service, process_id):
     contract.output.model_validate(output)
 
 
+def test_reconstruction_input_schemas_only_include_referenced_definitions():
+    description = ReferenceCatalog().get_process("roofer:reconstruct_buildings:v1")
+    assert description is not None
+    definitions = {"BAGArea", "BAGAsset", "BAGBuildings"}
+
+    for name in ["point_cloud_ids", "name", "config"]:
+        assert not definitions.intersection(
+            description.inputs[name].schema_.get("$defs", {})
+        )
+
+    bag_schema = description.inputs["bag"].schema_
+    assert definitions.issubset(bag_schema["$defs"])
+    validator = Draft202012Validator(bag_schema)
+    for selector in [
+        {"kind": "asset", "asset_id": 456},
+        {"kind": "buildings", "building_ids": ["0000000000000001"]},
+        {
+            "kind": "area",
+            "wkt": "POLYGON ((-1 -1,3 -1,3 3,-1 3,-1 -1))",
+            "crs": "EPSG:28992",
+        },
+    ]:
+        validator.validate(selector)
+
+
 INVALID = [
     {},
     {"point_clouds": []},
