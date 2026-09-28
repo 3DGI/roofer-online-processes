@@ -23,7 +23,7 @@ def test_root_url_combines_external_and_mount_paths_once() -> None:
     assert root_url(request) == "https://api.example.test/public/ogcapi"
 
 
-def test_process_collection_exposes_proposal_processes() -> None:
+def test_process_collection_exposes_published_processes() -> None:
     response = client.get("/ogcapi/processes")
 
     assert response.status_code == 200
@@ -31,7 +31,6 @@ def test_process_collection_exposes_proposal_processes() -> None:
         "roofer:validate_point_cloud:v1",
         "roofer:reconstruct_buildings:v1",
         "roofer:convert_format:v1",
-        "roofer:export_to_3dcitydb:v1",
     ]
 
 
@@ -77,7 +76,7 @@ def test_async_execution_returns_job_location() -> None:
 def test_sync_execution_returns_results() -> None:
     response = client.post(
         "/ogcapi/processes/roofer%3Avalidate_point_cloud%3Av1/execution",
-        json={"inputs": {"point_clouds": [{"kind": "asset", "asset_id": 123}]}},
+        json={"inputs": {"point_clouds": [{"kind": "url", "url": "https://data.example/survey.laz"}]}},
         headers={"Prefer": "respond-sync"},
     )
 
@@ -107,7 +106,7 @@ def test_jobs_are_scoped_to_authenticated_subject() -> None:
 def test_results_support_output_selection_and_per_output_retrieval() -> None:
     created = client.post(
         "/ogcapi/processes/roofer%3Aconvert_format%3Av1/execution",
-        json={"inputs": {"model_3d_id": 789, "formats": ["obj"]}},
+        json={"inputs": {"model_3d_id": 789, "formats": ["gpkg"]}},
         headers={"Authorization": "Bearer result-user"},
     )
     job_id = created.json()["id"]
