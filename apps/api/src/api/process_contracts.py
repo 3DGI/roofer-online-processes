@@ -290,6 +290,11 @@ CONTRACTS = {
 
 class RooferContractValidator:
     def validate_inputs(self, process_id: str, inputs: dict[str, Any]) -> dict[str, Any]:
+        if process_id == "echo":
+            value = inputs.get("value")
+            if not isinstance(value, str):
+                raise ContractViolation("The echo process requires a string value.")
+            return {"value": value}
         try:
             normalized = (
                 CONTRACTS[process_id]
@@ -312,6 +317,10 @@ class RooferContractValidator:
         return normalized
 
     def validate_results(self, process_id: str, results: Results) -> Results:
+        if process_id == "echo":
+            if set(results.outputs) != {"value"} or not isinstance(results.outputs["value"], str):
+                raise ContractViolation("Invalid echo results.")
+            return results
         contract = CONTRACTS[process_id]
         if set(results.outputs) != {contract.output_name}:
             raise ContractViolation("Invalid backend results.")

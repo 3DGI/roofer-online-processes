@@ -82,7 +82,7 @@ class ReferenceCatalog:
                 inputs={
                     "value": InputDescription(
                         title="value",
-                        schema={"type": "object", "properties": {"value": {"type": "string"}}},
+                        schema={"type": "string"},
                         minOccurs=1,
                         maxOccurs=1,
                     )
@@ -90,7 +90,7 @@ class ReferenceCatalog:
                 outputs={
                     "value": OutputDescription(
                         title="value",
-                        schema={"type": "object", "properties": {"value": {"type": "string"}}},
+                        schema={"type": "string"},
                     )
                 },
                 jobControlOptions=[JobControlOption.execute_async, JobControlOption.execute_sync],
@@ -119,8 +119,9 @@ class ReferenceCatalog:
                             title=name,
                             schema={
                                 "type": "object",
-                                "properties": {name: field | {"$defs": referenced_definitions(field, definitions)}},
+                                "properties": {name: field},
                                 "required": [name] if name in schema.get("required", []) else [],
+                                **{"$defs": referenced_definitions(field, definitions)},
                             },
                             minOccurs=1 if name in schema.get("required", []) else 0,
                             maxOccurs=1,
@@ -216,6 +217,18 @@ class ReferenceBackend:
         subject: str,
         mode: JobControlOption,
     ) -> ReferenceSubmission:
+        if process_id == "echo":
+            self._counter += 1
+            upstream_id = f"reference-{self._counter}"
+            self._results[upstream_id] = (subject, Results(outputs={"value": inputs["value"]}))
+            return ReferenceSubmission(
+                upstream_id,
+                StatusCode.successful if mode == JobControlOption.execute_sync else StatusCode.accepted,
+                "Reference execution completed"
+                if mode == JobControlOption.execute_sync
+                else "Reference execution accepted",
+            )
+
         operation = process_id.split(":")[1]
         selection = None
         if operation == "validate_point_cloud":
