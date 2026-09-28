@@ -316,8 +316,13 @@ class ReferenceBackend:
             "cityjson": "application/json",
         }[format]
 
-    def artifact(self, model_id: int, format: str, subject: str) -> bytes | None:
-        if format not in self.models.get((subject, model_id), []):
+    def artifact(self, model_id: int, format: str) -> bytes | None:
+        # Artifact links are public. Keep checking that the requested format was
+        # generated for this model before serving its fixture bytes.
+        if not any(
+            owner_model_id == model_id and format in formats
+            for (_owner, owner_model_id), formats in self.models.items()
+        ):
             return None
         filename = {
             "gpkg": "reconstruction.gpkg",

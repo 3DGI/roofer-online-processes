@@ -60,9 +60,8 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/v1/reconstruction/{model_3d_id}/export/{format}")
-def artifact(request: Request, model_3d_id: int, format: str) -> Response:
-    owner = ReferenceAuthenticator().authenticate(request.headers.get("authorization")).subject
-    content = backend.artifact(model_3d_id, format, owner)
+def artifact(model_3d_id: int, format: str) -> Response:
+    content = backend.artifact(model_3d_id, format)
     if content is None:
         raise HTTPException(status_code=404, detail="Artifact not found.")
     return Response(
