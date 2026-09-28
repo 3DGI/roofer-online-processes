@@ -40,7 +40,7 @@ jobs:
           uv run --package roofer-online-processes-api uvicorn api.main:app --host 0.0.0.0 > /tmp/ogc-api.log 2>&1 &
           echo $! > /tmp/ogc-api.pid
       - name: Start OGC TEAM Engine ETS
-        run: docker run --network host --detach --name ogc-processes-ets ogccite/ets-ogcapi-processes10
+        run: docker run --add-host=host.docker.internal:host-gateway --publish 8080:8080 --detach --name ogc-processes-ets ogccite/ets-ogcapi-processes10
       - name: Wait for services
         run: |
           for attempt in $(seq 1 60); do
@@ -53,6 +53,8 @@ jobs:
           docker logs ogc-processes-ets
           exit 1
       - name: Run OGC API - Processes ETS
+        env:
+          OGC_IUT_URL: http://host.docker.internal:8000/ogcapi/
         run: python docker/ets-ogcapi-processes/run_ets.py
       - name: Save ETS report
         if: always()
