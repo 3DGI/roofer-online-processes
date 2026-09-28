@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from time import sleep
 from typing import Any
 
 from ogc_processes.interfaces import ContractViolation
@@ -23,9 +24,7 @@ from shapely.geometry import box
 from api.process_contracts import CONTRACTS
 
 
-def referenced_definitions(
-    schema: dict[str, Any], definitions: dict[str, Any]
-) -> dict[str, Any]:
+def referenced_definitions(schema: dict[str, Any], definitions: dict[str, Any]) -> dict[str, Any]:
     """Return definitions referenced by a schema, including their dependencies."""
     pending = list(_definition_references(schema))
     selected: dict[str, Any] = {}
@@ -96,13 +95,8 @@ class ReferenceCatalog:
                             title=name,
                             schema={
                                 "type": "object",
-                                "properties": {
-                                    name: field
-                                    | {"$defs": referenced_definitions(field, definitions)}
-                                },
-                                "required": [name]
-                                if name in schema.get("required", [])
-                                else [],
+                                "properties": {name: field | {"$defs": referenced_definitions(field, definitions)}},
+                                "required": [name] if name in schema.get("required", []) else [],
                             },
                             minOccurs=1 if name in schema.get("required", []) else 0,
                             maxOccurs=1,
@@ -114,9 +108,7 @@ class ReferenceCatalog:
                             title=contract.output_name,
                             schema={
                                 "type": "object",
-                                "properties": contract.output.model_json_schema().get(
-                                    "properties", {}
-                                ),
+                                "properties": contract.output.model_json_schema().get("properties", {}),
                                 **{
                                     key: value
                                     for key, value in contract.output.model_json_schema().items()
@@ -134,15 +126,10 @@ class ReferenceCatalog:
             )
 
     def list_processes(self) -> list[ProcessSummary]:
-        return [
-            ProcessSummary.model_validate(process.model_dump())
-            for process in self._processes
-        ]
+        return [ProcessSummary.model_validate(process.model_dump()) for process in self._processes]
 
     def get_process(self, process_id: str) -> ProcessDescription | None:
-        return next(
-            (process for process in self._processes if process.id == process_id), None
-        )
+        return next((process for process in self._processes if process.id == process_id), None)
 
 
 @dataclass(frozen=True)
@@ -165,26 +152,13 @@ class ReferenceBackend:
         data_dir: str | Path | None = None,
     ) -> None:
         self.artifact_base_url = artifact_base_url.rstrip("/")
-        self.data_dir = (
-            Path(data_dir)
-            if data_dir is not None
-            else Path(__file__).resolve().parents[4] / "data"
-        )
+        self.data_dir = Path(data_dir) if data_dir is not None else Path(__file__).resolve().parents[4] / "data"
         self._counter = 0
         self.feature_limit = feature_limit
         self._results: dict[str, tuple[str, Results]] = {}
         self.point_clouds: dict[tuple[str, int], bool] = {}
         self.bags: dict[tuple[str, int], list[str]] = {}
         self.models: dict[tuple[str, int], list[str]] = {}
-        self.uploads = {
-            "https://roofer.example/api/v1/pointcloud/upload/123": (123, True, None),
-            "https://roofer.example/api/v1/pointcloud/upload/125": (125, False, None),
-        }
-        self.remote_sources = {
-            "https://data.example/survey.laz": "ready",
-            "https://data.example/invalid.laz": "invalid",
-            "https://data.example/failed.laz": "failed",
-        }
         self.footprints = {
             "0000000000000001": box(0, 0, 2, 2),
             "0000000000000002": box(4, 0, 6, 2),
@@ -206,15 +180,9 @@ class ReferenceBackend:
                 raise ContractViolation("Requested buildings are unavailable.")
         else:
             area = from_wkt(selector["wkt"]).buffer(1)
-            selected = [
-                identifier
-                for identifier, footprint in self.footprints.items()
-                if area.contains(footprint)
-            ]
+            selected = [identifier for identifier, footprint in self.footprints.items() if area.contains(footprint)]
         if not selected or len(selected) > self.feature_limit:
-            raise ContractViolation(
-                "BAG selection is empty or exceeds the feature limit."
-            )
+            raise ContractViolation("BAG selection is empty or exceeds the feature limit.")
         return sorted(selected)
 
     def submit(
@@ -227,52 +195,22 @@ class ReferenceBackend:
         operation = process_id.split(":")[1]
         selection = None
         if operation == "validate_point_cloud":
-            for source in inputs["point_clouds"]:
-                if source["kind"] == "upload":
-                    upload = self.uploads.get(source["upload_url"])
-                    if (
-                        upload is None
-                        or not upload[1]
-                        or upload[2] not in {None, subject}
-                    ):
-                        raise ContractViolation("Upload is unavailable or incomplete.")
-                if (
-                    source["kind"] == "asset"
-                    and not self._owned_cloud(source["asset_id"], subject)
-                    and (subject, source["asset_id"]) not in self.point_clouds
-                ):
-                    raise ContractViolation("Point cloud is unavailable.")
+            sleep(5)
         elif operation == "reconstruct_buildings":
-            if not all(
-                self._owned_cloud(identifier, subject)
-                for identifier in inputs["point_cloud_ids"]
-            ):
+            if not all(self._owned_cloud(identifier, subject) for identifier in inputs["point_cloud_ids"]):
                 raise ContractViolation("Ready owned point clouds are required.")
             selection = self._bag_selection(inputs["bag"], subject)
         else:
-            if (subject, inputs["model_3d_id"]) not in self.models and inputs[
-                "model_3d_id"
-            ] != 789:
+            if (subject, inputs["model_3d_id"]) not in self.models and inputs["model_3d_id"] != 789:
                 raise ContractViolation("Ready owned model is required.")
         self._counter += 1
         upstream_id = f"reference-{self._counter}"
         generated_id = 10000 + self._counter
         if operation == "validate_point_cloud":
             outcomes = []
-            for index, source in enumerate(inputs["point_clouds"]):
-                cloud_id = None
+            for index, _source in enumerate(inputs["point_clouds"]):
+                cloud_id = generated_id * 100 + index
                 outcome = "ready"
-                if source["kind"] == "upload":
-                    cloud_id = self.uploads[source["upload_url"]][0]
-                elif source["kind"] == "asset":
-                    cloud_id = source["asset_id"]
-                    outcome = (
-                        "ready" if self._owned_cloud(cloud_id, subject) else "invalid"
-                    )
-                else:
-                    outcome = self.remote_sources.get(source["url"], "failed")
-                    if outcome != "failed":
-                        cloud_id = generated_id * 100 + index
                 item = {
                     "source_index": index,
                     "outcome": outcome,
@@ -289,11 +227,7 @@ class ReferenceBackend:
                         point_density=5.0,
                     )
                 else:
-                    item["diagnostic"] = (
-                        "unsupported_point_cloud"
-                        if outcome == "invalid"
-                        else "preparation_failed"
-                    )
+                    item["diagnostic"] = "unsupported_point_cloud" if outcome == "invalid" else "preparation_failed"
                 outcomes.append(item)
             payload = {
                 "all_ready": all(item["ready"] for item in outcomes),
@@ -301,11 +235,7 @@ class ReferenceBackend:
             }
         elif operation == "reconstruct_buildings":
             assert selection is not None
-            bag_id = (
-                inputs["bag"]["asset_id"]
-                if inputs["bag"]["kind"] == "asset"
-                else generated_id
-            )
+            bag_id = inputs["bag"]["asset_id"] if inputs["bag"]["kind"] == "asset" else generated_id
             self.bags[subject, bag_id] = selection
             formats = ["cityjson", "gpkg"]
             self.models[subject, generated_id] = formats
@@ -320,8 +250,7 @@ class ReferenceBackend:
                 payload["name"] = inputs["name"]
         elif operation == "convert_format":
             self.models[subject, inputs["model_3d_id"]] = sorted(
-                set(self.models.get((subject, inputs["model_3d_id"]), []))
-                | set(inputs["formats"])
+                set(self.models.get((subject, inputs["model_3d_id"]), [])) | set(inputs["formats"])
             )
             payload = {
                 "model_3d_id": inputs["model_3d_id"],
@@ -341,9 +270,7 @@ class ReferenceBackend:
         )
         return ReferenceSubmission(
             upstream_id,
-            StatusCode.successful
-            if mode == JobControlOption.execute_sync
-            else StatusCode.accepted,
+            StatusCode.successful if mode == JobControlOption.execute_sync else StatusCode.accepted,
             "Reference execution completed"
             if mode == JobControlOption.execute_sync
             else "Reference execution accepted",
@@ -352,10 +279,7 @@ class ReferenceBackend:
     def _artifacts(self, model_id: int, formats: list[str]) -> dict[str, Any]:
         return {
             format: {
-                "href": (
-                    f"{self.artifact_base_url}/api/v1/reconstruction/"
-                    f"{model_id}/export/{format}"
-                ),
+                "href": (f"{self.artifact_base_url}/api/v1/reconstruction/{model_id}/export/{format}"),
                 "type": self.artifact_media_type(format),
             }
             for format in formats
@@ -416,11 +340,7 @@ class ReferenceJobStore:
         return record[0], record[1]
 
     def list(self, subject: str) -> list[tuple[JobStatus, str]]:
-        return [
-            (job, upstream_id)
-            for job, upstream_id, owner in self._jobs.values()
-            if owner == subject
-        ]
+        return [(job, upstream_id) for job, upstream_id, owner in self._jobs.values() if owner == subject]
 
     def update(self, job: JobStatus) -> None:
         record = self._jobs.get(job.id)

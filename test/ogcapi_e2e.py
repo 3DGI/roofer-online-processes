@@ -132,7 +132,7 @@ class OGCAPIEndToEnd(unittest.TestCase):
         status, _, payload, _ = self.request(
             "POST",
             f"processes/{quote('roofer:validate_point_cloud:v1', safe='')}/execution",
-            body={"inputs": {"point_clouds": [{"kind": "asset", "asset_id": 123}]}},
+            body={"inputs": {"point_clouds": [{"kind": "url", "url": "https://data.example/survey.laz"}]}},
             headers={"Prefer": "respond-sync"},
         )
         self.assertEqual(status, 200)
@@ -164,13 +164,9 @@ class OGCAPIEndToEnd(unittest.TestCase):
             conversion_id, {"model_3d_id": 789, "formats": ["cityjson"]}
         )
         self.wait_for_success(conversion_location)
-        selected = self.get_json(
-            f"jobs/{conversion['id']}/results?{urlencode({'outputs': 'converted_model'})}"
-        )
+        selected = self.get_json(f"jobs/{conversion['id']}/results?{urlencode({'outputs': 'converted_model'})}")
         self.assertEqual(list(selected["outputs"]), ["converted_model"])
-        conversion_item = self.get_json(
-            f"jobs/{conversion['id']}/results/converted_model/0"
-        )
+        conversion_item = self.get_json(f"jobs/{conversion['id']}/results/converted_model/0")
         self.assertEqual(conversion_item, selected["outputs"]["converted_model"])
 
         jobs = self.get_json("jobs")["jobs"]

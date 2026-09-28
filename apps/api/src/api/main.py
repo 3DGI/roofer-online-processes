@@ -17,11 +17,7 @@ from api.reference_backend import (
 )
 
 catalog = ReferenceCatalog()
-backend = ReferenceBackend(
-    artifact_base_url=os.getenv(
-        "ROOFER_PROCESSES_PUBLIC_BASE_URL", "http://localhost:8000"
-    )
-)
+backend = ReferenceBackend(artifact_base_url=os.getenv("ROOFER_PROCESSES_PUBLIC_BASE_URL", "http://localhost:8000"))
 store = ReferenceJobStore()
 
 app = FastAPI(title="Roofer Online Processes", version="0.1.0")
@@ -38,10 +34,7 @@ app.mount("/ogcapi", ogc_app)
 def openapi_with_mounted_paths() -> dict[str, Any]:
     """Expose the mounted OGC API routes in the parent Swagger document."""
     schema = deepcopy(ogc_app.openapi())
-    schema["paths"] = {
-        f"/ogcapi{path}": path_item
-        for path, path_item in schema.get("paths", {}).items()
-    }
+    schema["paths"] = {f"/ogcapi{path}": path_item for path, path_item in schema.get("paths", {}).items()}
     return schema
 
 
@@ -68,11 +61,7 @@ def health() -> dict[str, str]:
 
 @app.get("/api/v1/reconstruction/{model_3d_id}/export/{format}")
 def artifact(request: Request, model_3d_id: int, format: str) -> Response:
-    owner = (
-        ReferenceAuthenticator()
-        .authenticate(request.headers.get("authorization"))
-        .subject
-    )
+    owner = ReferenceAuthenticator().authenticate(request.headers.get("authorization")).subject
     content = backend.artifact(model_3d_id, format, owner)
     if content is None:
         raise HTTPException(status_code=404, detail="Artifact not found.")

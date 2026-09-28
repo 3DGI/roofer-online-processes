@@ -60,9 +60,7 @@ class ExecutionBackend(Protocol):
 
     def status(
         self, upstream_id: str, subject: str
-    ) -> tuple[
-        StatusCode, str | None, int | None, datetime | None, datetime | None
-    ]: ...
+    ) -> tuple[StatusCode, str | None, int | None, datetime | None, datetime | None]: ...
 
     def results(self, upstream_id: str, subject: str) -> Results | None: ...
 
@@ -88,8 +86,6 @@ class ContractViolation(ValueError):
 class ProcessContractValidator(Protocol):
     """Host contracts applied before submission and before result projection."""
 
-    def validate_inputs(
-        self, process_id: str, inputs: dict[str, Any]
-    ) -> dict[str, Any]: ...
+    def validate_inputs(self, process_id: str, inputs: dict[str, Any]) -> dict[str, Any]: ...
 
     def validate_results(self, process_id: str, results: Results) -> Results: ...

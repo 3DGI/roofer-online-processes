@@ -35,16 +35,12 @@ def test_process_collection_exposes_proposal_processes() -> None:
     ]
 
 
-def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links() -> (
-    None
-):
+def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links() -> None:
     landing = client.get("/ogcapi/")
     specification = client.get("/ogcapi/openapi.json")
 
     assert landing.status_code == 200
-    service_desc = next(
-        link for link in landing.json()["links"] if link["rel"] == "service-desc"
-    )
+    service_desc = next(link for link in landing.json()["links"] if link["rel"] == "service-desc")
     assert service_desc["type"] == "application/vnd.oai.openapi+json;version=3.0"
     document = specification.json()
     assert document["openapi"] == "3.0.3"
@@ -53,9 +49,7 @@ def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links
 
     outputs_parameter = next(
         parameter
-        for parameter in document["paths"]["/jobs/{job_id}/results"]["get"][
-            "parameters"
-        ]
+        for parameter in document["paths"]["/jobs/{job_id}/results"]["get"]["parameters"]
         if parameter["name"] == "outputs"
     )
     assert outputs_parameter["schema"] == {
@@ -70,9 +64,7 @@ def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links
 def test_async_execution_returns_job_location() -> None:
     response = client.post(
         "/ogcapi/processes/roofer%3Areconstruct_buildings%3Av1/execution",
-        json={
-            "inputs": {"point_cloud_ids": [1], "bag": {"kind": "asset", "asset_id": 2}}
-        },
+        json={"inputs": {"point_cloud_ids": [1], "bag": {"kind": "asset", "asset_id": 2}}},
         headers={"Authorization": "Bearer test-user"},
     )
 
@@ -106,9 +98,7 @@ def test_jobs_are_scoped_to_authenticated_subject() -> None:
     )
     job_id = created.json()["id"]
 
-    response = client.get(
-        f"/ogcapi/jobs/{job_id}", headers={"Authorization": "Bearer another-user"}
-    )
+    response = client.get(f"/ogcapi/jobs/{job_id}", headers={"Authorization": "Bearer another-user"})
 
     assert response.status_code == 404
     assert response.headers["content-type"].startswith("application/problem+json")
