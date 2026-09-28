@@ -65,13 +65,53 @@ def test_async_execution_returns_job_location() -> None:
     response = client.post(
         "/ogcapi/processes/roofer%3Areconstruct_buildings%3Av1/execution",
         json={"inputs": {"point_cloud_ids": [1], "bag": {"kind": "asset", "asset_id": 2}}},
-        headers={"Authorization": "Bearer test-user"},
+        headers={"Authorization": "Bearer test-user", "Prefer": "respond-async"},
     )
 
     assert response.status_code == 201
     assert response.headers["location"].startswith("http://testserver/ogcapi/jobs/")
     assert response.json()["links"][0]["href"] == response.headers["location"]
     assert response.json()["status"] == "accepted"
+    assert response.json()["jobID"] == response.json()["id"]
+    assert response.json()["type"] == "process"
+    assert response.json()["links"][1]["rel"] == "http://www.opengis.net/def/rel/ogc/1.0/results"
+    assert all("title" not in link for link in response.json()["links"])
+
+
+def test_execution_defaults_to_sync_and_raw_returns_output_value() -> None:
+    response = client.post("/ogcapi/processes/echo/execution", json={"inputs": {"value": "hello"}})
+    raw = client.post(
+        "/ogcapi/processes/echo/execution",
+        json={
+            "inputs": {
+                "value": "hello",
+            },
+            "response": "raw",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"outputs": {"value": "hello"}, "links": []}
+    assert raw.status_code == 200
+    assert raw.json() == "hello"
+
+
+def test_job_list_contains_ogc_10_fields_and_exception_shape() -> None:
+    created = client.post(
+        "/ogcapi/processes/roofer%3Areconstruct_buildings%3Av1/execution",
+        json={"inputs": {"point_cloud_ids": [1], "bag": {"kind": "asset", "asset_id": 2}}},
+        headers={"Prefer": "respond-async"},
+    )
+    listing = client.get("/ogcapi/jobs")
+    missing = client.get("/ogcapi/jobs/not-a-job")
+
+    assert created.status_code == 201
+    assert listing.status_code == 200
+    entry = next(job for job in listing.json()["jobs"] if job["id"] == created.json()["id"])
+    assert entry["jobID"] == entry["id"]
+    assert entry["type"] == "process"
+    assert missing.status_code == 404
+    assert missing.json() == {"code": "NotFound", "description": "Job not found."}
 
 
 def test_sync_execution_returns_results() -> None:
@@ -94,7 +134,7 @@ def test_jobs_are_scoped_to_authenticated_subject() -> None:
                 "bag": {"kind": "asset", "asset_id": 2},
             }
         },
-        headers={"Authorization": "Bearer owner"},
+        headers={"Authorization": "Bearer owner", "Prefer": "respond-async"},
     )
     job_id = created.json()["id"]
 
@@ -108,7 +148,7 @@ def test_results_support_output_selection_and_per_output_retrieval() -> None:
     created = client.post(
         "/ogcapi/processes/roofer%3Aconvert_format%3Av1/execution",
         json={"inputs": {"model_3d_id": 789, "formats": ["gpkg"]}},
-        headers={"Authorization": "Bearer result-user"},
+        headers={"Authorization": "Bearer result-user", "Prefer": "respond-async"},
     )
     job_id = created.json()["id"]
 
