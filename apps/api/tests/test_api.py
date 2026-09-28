@@ -28,6 +28,7 @@ def test_process_collection_exposes_published_processes() -> None:
 
     assert response.status_code == 200
     assert [process["id"] for process in response.json()["processes"]] == [
+        "echo",
         "roofer:validate_point_cloud:v1",
         "roofer:reconstruct_buildings:v1",
         "roofer:convert_format:v1",
@@ -100,7 +101,7 @@ def test_jobs_are_scoped_to_authenticated_subject() -> None:
     response = client.get(f"/ogcapi/jobs/{job_id}", headers={"Authorization": "Bearer another-user"})
 
     assert response.status_code == 404
-    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.headers["content-type"].startswith("application/json")
 
 
 def test_results_support_output_selection_and_per_output_retrieval() -> None:

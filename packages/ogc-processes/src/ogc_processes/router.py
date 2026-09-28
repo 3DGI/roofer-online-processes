@@ -49,9 +49,9 @@ CONFORMANCE_JOB_LIST = (
     "http://www.opengis.net/spec/ogcapi-processes-1/1.0/conf/job-list",
 )
 PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
-    400: {"model": ExceptionReport},
-    404: {"model": ExceptionReport},
-    500: {"model": ExceptionReport},
+    400: {"model": ExceptionReport, "content": {"application/json": {}}},
+    404: {"model": ExceptionReport, "content": {"application/json": {}}},
+    500: {"model": ExceptionReport, "content": {"application/json": {}}},
 }
 REL_CONFORMANCE = "http://www.opengis.net/def/rel/ogc/1.0/conformance"
 REL_PROCESSES = "http://www.opengis.net/def/rel/ogc/1.0/processes"
@@ -237,7 +237,12 @@ def create_app(
             ]
         )
 
-    @app.get("/processes", response_model=ProcessList, responses=PROBLEM_RESPONSES)
+    @app.get(
+        "/processes",
+        response_model=ProcessList,
+        response_model_exclude_none=True,
+        responses=PROBLEM_RESPONSES,
+    )
     def list_processes(request: Request, limit: Annotated[int, Query(ge=1, le=1000)] = 10) -> ProcessList:
         root = root_url(request)
         return ProcessList(
@@ -313,7 +318,12 @@ def create_app(
             content=job.model_dump(mode="json"),
         )
 
-    @app.get("/jobs", response_model=JobList, responses=PROBLEM_RESPONSES)
+    @app.get(
+        "/jobs",
+        response_model=JobList,
+        response_model_exclude_none=True,
+        responses=PROBLEM_RESPONSES,
+    )
     def list_jobs(
         request: Request,
         type: Annotated[list[str] | None, Query()] = None,
@@ -406,7 +416,7 @@ def problem_response(request: Request, status_code: int, detail: str) -> JSONRes
     )
     return JSONResponse(
         status_code=status_code,
-        media_type="application/problem+json",
+        media_type="application/json",
         content=report.model_dump(),
     )
 
