@@ -3,8 +3,9 @@
 The reusable protocol app requires a catalog, execution backend, job store, authenticator and
 contract validator. The Roofer models in `api.process_contracts` define the four public contracts.
 Invoke host application services internally and persist owned OGC jobs/results with mappings to
-Roofer processes and workflow run IDs. Authenticate all job, asset, and artifact operations using
-the host user system. Never expose filesystem paths, submitted URLs, or connection credentials.
+Roofer processes and workflow run IDs. Authenticate job and asset operations using the host user
+system. Reference artifact downloads are public. Never expose filesystem paths, submitted URLs, or
+connection credentials.
 
 The reference service accepts demo bearer subjects (missing authorization defaults to `demo`);
 this is development behavior. Its built-in IDs are per-subject fixtures; generated resources are
@@ -60,7 +61,7 @@ Area lookup buffers by one metre and dissolves overlaps before full footprint co
 Missing identifiers, empty selections and feature-limit overflow are errors, never truncated results.
 Poll the reconstruction job and GET its results. `outputs.building_model` records the resolved
 `bag_id`, sorted `building_ids`, model ID, available dataset date and `artifacts`.
-Download each artifact's `href` with Roofer authorization; the reference API serves the
+Download each artifact's `href` without authentication; the reference API serves the
 GeoPackage and CityJSON fixtures from `data/`.
 Resolved selection does not promise an immutable BAG geometry snapshot.
 
@@ -77,7 +78,8 @@ Conversion and export examples:
 Submit to `roofer:convert_format:v1` and `roofer:export_to_3dcitydb:v1` respectively.
 Outputs are `converted_model` (model ID/artifacts) and `export_receipt` (model ID/completed,
 optional profile/count). The reference API currently supports the `cityjson` and `gpkg` fixture
-artifacts, copied into its Docker image from `data/`. Explicit CityDB connections use
+artifacts, included in its runtime Docker image from `data/`. Artifact links are public.
+Explicit CityDB connections use
 `host`, strict `port` (1–65535), `database`, `user`, `password`, optional `schema` (citydb),
 `useSSL` (false). A shared profile takes precedence and removes explicit connection settings.
 `importMode` supports `import_all`, `skip`, `delete`, `terminate`. Credentials are transient.

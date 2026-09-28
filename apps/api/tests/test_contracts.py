@@ -8,7 +8,7 @@ from api.reference_backend import (
     ReferenceCatalog,
     ReferenceJobStore,
 )
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
@@ -34,9 +34,8 @@ def service():
     )
 
     @app.get("/api/v1/reconstruction/{model_id}/export/{format}")
-    def artifact(request: Request, model_id: int, format: str):
-        owner = ReferenceAuthenticator().authenticate(request.headers.get("authorization")).subject
-        content = backend.artifact(model_id, format, owner)
+    def artifact(model_id: int, format: str):
+        content = backend.artifact(model_id, format)
         if content is None:
             raise HTTPException(404)
         return Response(content, media_type=backend.artifact_media_type(format))
@@ -225,7 +224,12 @@ def test_buffered_area_and_limit(service, wkt):
 
 def test_retrieval_artifacts_and_bad_backend(service):
     client, backend, _ = service
-    created = execute(client, "convert_format", {"model_3d_id": 789, "formats": ["gpkg"]}, sync=False)
+    created = execute(
+        client,
+        "convert_format",
+        {"model_3d_id": 789, "formats": ["gpkg", "cityjson"]},
+        sync=False,
+    )
     location = created.headers["location"]
     headers = {"Authorization": "Bearer owner"}
     assert client.get(location, headers=headers).json()["status"] == "successful"
@@ -235,16 +239,22 @@ def test_retrieval_artifacts_and_bad_backend(service):
         == complete
     )
     assert client.get(location + "/results/converted_model", headers=headers).json() == complete
-    artifact = client.get(complete["artifacts"]["gpkg"]["href"], headers=headers)
+    artifact = client.get(complete["artifacts"]["gpkg"]["href"])
     assert artifact.headers["content-type"] == "application/geopackage+sqlite3"
     assert artifact.content == (backend.data_dir / "reconstruction.gpkg").read_bytes()
+    cityjson_url = backend._artifacts(789, ["cityjson"])["cityjson"]["href"]
+    cityjson = client.get(cityjson_url)
+    assert cityjson.status_code == 200
+    assert cityjson.headers["content-type"] == "application/json"
+    assert cityjson.content == (backend.data_dir / "reconstruction.city.json").read_bytes()
     assert (
         client.get(
             complete["artifacts"]["gpkg"]["href"],
             headers={"Authorization": "Bearer other"},
         ).status_code
-        == 404
+        == 200
     )
+    assert client.get("/api/v1/reconstruction/789/export/unsupported").status_code == 404
     backend._results["reference-1"] = (
         "owner",
         Results(outputs={"converted_model": {"password": "secret"}}),
@@ -343,6 +353,9 @@ def test_upload_input_is_rejected_and_identifier_selection_is_sorted(service):
     )
     model = response.json()["outputs"]["building_model"]
     assert model["building_ids"] == ["0000000000000001", "0000000000000002"]
+    reconstruction_download = client.get(model["artifacts"]["gpkg"]["href"])
+    assert reconstruction_download.status_code == 200
+    assert reconstruction_download.content == (backend.data_dir / "reconstruction.gpkg").read_bytes()
     reused = execute(
         client,
         "reconstruct_buildings",
