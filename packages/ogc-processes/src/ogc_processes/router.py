@@ -294,7 +294,7 @@ def create_app(
     def execute(
         request: Request,
         process_id: str,
-        payload: Annotated[ExecuteRequest, Body(...)],
+        payload: Annotated[ExecuteRequest, Body(default_factory=ExecuteRequest)],
     ) -> Response | dict[str, Any]:
         process = catalog.get_process(process_id)
         if process is None:
