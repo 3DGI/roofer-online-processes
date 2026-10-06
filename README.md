@@ -23,7 +23,7 @@ reverse proxy, forward the public `Host` and scheme (`X-Forwarded-Host` and
 With the API running, validate it against the OGC API - Processes 2.0.0 draft using:
 
 ```bash
-just ogc-check
+just ogc-lint
 ```
 
 Set `OGC_API_URL` to check another running instance. The checker returns a non-zero status when
