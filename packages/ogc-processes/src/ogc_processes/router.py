@@ -292,6 +292,7 @@ def create_app(
         },
         openapi_extra={
             "requestBody": {
+                "required": True,
                 "content": {
                     "application/json": {
                         "schema": {
