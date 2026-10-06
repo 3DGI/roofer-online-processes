@@ -282,9 +282,7 @@ def create_app(
             200: {
                 "description": "Synchronous result in the requested raw or document form.",
                 "content": {
-                    "application/json": {
-                        "schema": {"type": "object", "additionalProperties": True}
-                    },
+                    "application/json": {"schema": {"type": "object", "additionalProperties": True}},
                     "text/plain": {"schema": {"type": "string"}},
                     "multipart/related": {"schema": {"type": "string", "format": "binary"}},
                 },
