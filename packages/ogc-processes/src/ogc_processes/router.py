@@ -118,6 +118,42 @@ def create_app(
     def openapi_30() -> dict[str, Any]:
         schema = native_openapi()
         _normalize_openapi_30(schema)
+        execution = schema.get("paths", {}).get("/processes/{process_id}/execution", {}).get("post")
+        if isinstance(execution, dict):
+            execution["requestBody"] = {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "process": {"type": "string", "format": "uri"},
+                                "inputs": {"type": "object", "additionalProperties": {}},
+                                "outputs": {
+                                    "type": "object",
+                                    "additionalProperties": {
+                                        "type": "object",
+                                        "properties": {
+                                            "transmissionMode": {
+                                                "type": "string",
+                                                "enum": ["value", "reference"],
+                                            },
+                                            "format": {"type": "object"},
+                                            "mediaType": {"type": "string"},
+                                        },
+                                    },
+                                },
+                                "response": {
+                                    "type": "string",
+                                    "enum": ["raw", "document"],
+                                    "default": "raw",
+                                },
+                                "subscriber": {"type": "object"},
+                            },
+                        }
+                    }
+                },
+            }
         for path_item in schema.get("paths", {}).values():
             if not isinstance(path_item, dict):
                 continue
@@ -289,18 +325,6 @@ def create_app(
             },
             201: {"model": JobStatus},
             **PROBLEM_RESPONSES,
-        },
-        openapi_extra={
-            "requestBody": {
-                "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "$ref": "https://raw.githubusercontent.com/opengeospatial/ogcapi-processes/master/openapi/schemas/processes-core/execute.yaml"
-                        }
-                    }
-                }
-            }
         },
     )
     def execute(
