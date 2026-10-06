@@ -1,25 +1,34 @@
 # OGC API - Processes TEAM Engine check
 
 This folder runs the OGC CITE Executable Test Suite (ETS) for OGC API - Processes
-Part 1 (1.0) in the official `ogccite/ets-ogcapi-processes10` container. The
+Part 1 (1.0) in the official `ogccite/ets-ogcapi-processes10:1.3-teamengine-6.0.0-RC2` container. The
 GitHub Actions job starts this API checkout on the runner, starts TEAM Engine
 on a bridge network, then submits an ETS run through TEAM Engine's REST API.
 The IUT URL is therefore the just-started API, not the staging deployment.
 
-The runner expects Docker, Python, and the API dependencies to be available. For
-a local run, start the API on port 8000 and publish TEAM Engine's web port:
+The runner expects Docker, Python, `just`, and a locally running API. Start the
+API on port 8000 so it listens on the host network interface:
 
 ```sh
-docker run --add-host=host.docker.internal:host-gateway --publish 8080:8080 --detach --name ogc-processes-ets ogccite/ets-ogcapi-processes10
-OGC_IUT_URL=http://host.docker.internal:8000/ogcapi/ python docker/ets-ogcapi-processes/run_ets.py
-docker rm --force ogc-processes-ets
+just api-run
 ```
 
-The runner writes an EARL XML report to `artifacts/ogc-processes-ets.xml`. The
-default TEAM Engine test account in the ETS image is `ogctest` / `ogctest`.
-Override `TEAM_ENGINE_URL` or `OGC_IUT_URL` to use a different reachable
-instance. Do not point this runner at a production service unless that is
-specifically intended.
+In another terminal, start TEAM Engine and run the headless ETS through its REST
+API:
+
+```sh
+just ogc-teamengine-up
+just ogc-processes-ets
+just ogc-teamengine-down
+```
+
+The default IUT URL is `http://host.docker.internal:8000/ogcapi/`, which lets
+the Team Engine container reach the host API. Pass another URL to test a
+different reachable API, for example `just ogc-processes-ets
+http://host.docker.internal:18082/ogcapi/`. CI uses the same `just` recipes.
+The runner writes an EARL XML report to `artifacts/ogc-processes-ets.xml`.
+Override `TEAM_ENGINE_URL` when using a different Team Engine instance. Do not
+point this runner at a production service unless that is specifically intended.
 
 The suite requires an echo process ID. This API already advertises `echo`, but
 it previously could not execute it through the Roofer-only contract adapter;
