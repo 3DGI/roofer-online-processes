@@ -1,12 +1,13 @@
 """Mountable OGC API - Processes Part 1 version 2 application."""
 
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ogc_processes.interfaces import (
@@ -278,18 +279,30 @@ def create_app(
         "/processes/{process_id}/execution",
         response_model=None,
         responses={
-            200: {"model": Results},
+            200: {
+                "description": "Synchronous result in the requested raw or document form.",
+                "content": {
+                    "application/json": {"schema": {}},
+                    "text/plain": {"schema": {"type": "string"}},
+                    "multipart/related": {"schema": {"type": "string", "format": "binary"}},
+                },
+            },
             201: {"model": JobStatus},
             **PROBLEM_RESPONSES,
         },
     )
-    def execute(request: Request, process_id: str, payload: ExecuteRequest) -> JSONResponse | Results:
+    def execute(request: Request, process_id: str, payload: ExecuteRequest) -> Response | dict[str, Any]:
         process = catalog.get_process(process_id)
         if process is None:
             raise HTTPException(status_code=404, detail="Process not found.")
         mode = execution_mode(request.headers.get("prefer"))
         if mode not in process.jobControlOptions:
             raise HTTPException(status_code=400, detail="Requested execution mode is unavailable.")
+        if payload.outputs is not None:
+            if not payload.outputs or any(name not in process.outputs for name in payload.outputs):
+                raise HTTPException(status_code=400, detail="Requested output is not available.")
+            if any(option.transmissionMode not in process.outputTransmission for option in payload.outputs.values()):
+                raise HTTPException(status_code=400, detail="Requested output transmission is unavailable.")
         owner = subject(request)
         inputs = validator.validate_inputs(process_id, payload.inputs)
         submission = backend.submit(process_id, inputs, owner, mode)
@@ -311,11 +324,13 @@ def create_app(
         store.create(job, submission.upstream_id, owner)
         if mode == JobControlOption.execute_sync:
             results = validated_results(process_id, submission.upstream_id, owner)
+            results = select_outputs(results, list(payload.outputs) if payload.outputs is not None else None)
             if payload.response == "raw":
-                if len(results.outputs) != 1:
-                    raise HTTPException(status_code=400, detail="Raw response requires exactly one output.")
-                return JSONResponse(content=next(iter(results.outputs.values())))
-            return results
+                if len(results.outputs) == 1:
+                    value = next(iter(results.outputs.values()))
+                    return PlainTextResponse(value) if isinstance(value, str) else JSONResponse(content=value)
+                return multipart_results(results)
+            return result_document(results)
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             headers={
@@ -370,7 +385,7 @@ def create_app(
 
     @app.get(
         "/jobs/{job_id}/results",
-        response_model=Results,
+        response_model=dict[str, Any],
         response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
     )
@@ -378,7 +393,7 @@ def create_app(
         request: Request,
         job_id: str,
         outputs: Annotated[list[str] | None, Query(style="form", explode=False)] = None,
-    ) -> Results:
+    ) -> JSONResponse:
         owner = subject(request)
         job = completed_job(request, job_id, owner)
         stored = store.get(job.id, owner)
@@ -386,16 +401,11 @@ def create_app(
             raise HTTPException(status_code=404, detail="Job not found.")
         results = validated_results(job.processID, stored[1], owner)
         selected = select_outputs(results, outputs)
-        selected.links = [
-            Link(
-                href=f"{root_url(request)}/jobs/{job.id}/results/{output_id}",
-                rel="item",
-                type="application/json",
-                title=output_id,
-            )
+        links = [
+            f'<{root_url(request)}/jobs/{job.id}/results/{output_id}>; rel="item"; type="application/json"'
             for output_id in selected.outputs
         ]
-        return selected
+        return JSONResponse(content=result_document(selected), headers={"Link": ", ".join(links)})
 
     @app.get(
         "/jobs/{job_id}/results/{output_id}",
@@ -419,6 +429,26 @@ def create_app(
         return output
 
     return app
+
+
+def multipart_results(results: Results) -> Response:
+    """Transmit multiple raw outputs in their native media types."""
+    boundary = uuid4().hex
+    parts = [
+        f"--{boundary}\r\nContent-Type: {'text/plain; charset=utf-8' if isinstance(value, str) else 'application/json'}"
+        f"\r\nContent-ID: <{name}>\r\n\r\n"
+        f"{value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)}\r\n"
+        for name, value in results.outputs.items()
+    ]
+    return Response(
+        content="".join(parts) + f"--{boundary}--\r\n",
+        media_type=f'multipart/related; boundary="{boundary}"',
+    )
+
+
+def result_document(results: Results) -> dict[str, Any]:
+    """Encode output IDs at the document root and qualify object values."""
+    return {name: {"value": value} if isinstance(value, dict) else value for name, value in results.outputs.items()}
 
 
 def problem_response(request: Request, status_code: int, detail: str) -> JSONResponse:

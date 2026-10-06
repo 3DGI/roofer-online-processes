@@ -46,7 +46,7 @@ def service():
 def execute(client, operation, inputs, sync=True):
     return client.post(
         f"/ogcapi/processes/roofer:{operation}:v1/execution",
-        json={"inputs": inputs},
+        json={"inputs": inputs, "response": "document"},
         headers={
             "Authorization": "Bearer owner",
             "Prefer": "respond-sync" if sync else "respond-async",
@@ -63,6 +63,18 @@ def test_artifact_urls_use_configured_public_base_url() -> None:
     assert ReferenceBackend().artifact_base_url == "http://localhost:8000"
 
 
+@pytest.mark.parametrize("outputs", [{}, {"missing": {}}, {"value": {"transmissionMode": "reference"}}])
+def test_invalid_output_requests_have_no_side_effects(service, outputs):
+    client, backend, store = service
+    response = client.post(
+        "/ogcapi/processes/echo/execution",
+        json={"inputs": {"value": "hello"}, "outputs": outputs},
+    )
+    assert response.status_code == 400
+    assert backend._counter == 0
+    assert store.list("demo") == []
+
+
 PUBLISHED_CONTRACTS = [process_id for process_id in CONTRACTS if not process_id.endswith("export_to_3dcitydb:v1")]
 
 
@@ -75,10 +87,10 @@ def test_examples_and_published_schemas(service, process_id):
     Draft202012Validator(description["inputsSchema"]).validate(contract.example)
     contract.inputs.model_validate(contract.example)
     for name, value in contract.example.items():
-        Draft202012Validator(description["inputs"][name]["schema"]).validate({name: value})
+        Draft202012Validator(description["inputs"][name]["schema"]).validate(value)
     response = execute(client, process_id.split(":")[1], contract.example)
     assert response.status_code == 200, response.text
-    output = response.json()["outputs"][contract.output_name]
+    output = response.json()[contract.output_name]["value"]
     Draft202012Validator(description["outputs"][contract.output_name]["schema"]).validate(output)
     contract.output.model_validate(output)
 
@@ -103,7 +115,7 @@ def test_reconstruction_input_schemas_only_include_referenced_definitions():
             "crs": "EPSG:28992",
         },
     ]:
-        validator.validate({"bag": selector})
+        validator.validate(selector)
 
 
 INVALID = [
@@ -172,7 +184,7 @@ def test_remote_point_cloud_placeholders_always_succeed(service):
     response = execute(client, "validate_point_cloud", {"point_clouds": sources})
     assert response.status_code == 200
     assert "https://" not in response.text and "secret" not in response.text
-    report = response.json()["outputs"]["validation_report"]
+    report = response.json()["validation_report"]["value"]
     assert report["all_ready"] is True
     assert [item["outcome"] for item in report["point_clouds"]] == ["ready"] * 3
     cloud = report["point_clouds"][0]["point_cloud_id"]
@@ -214,7 +226,7 @@ def test_buffered_area_and_limit(service, wkt):
     }
     response = execute(client, "reconstruct_buildings", inputs)
     assert response.status_code == 200
-    ids = response.json()["outputs"]["building_model"]["building_ids"]
+    ids = response.json()["building_model"]["value"]["building_ids"]
     assert ids[0] == "0000000000000001"
     backend.feature_limit = 0
     counter = backend._counter
@@ -233,9 +245,9 @@ def test_retrieval_artifacts_and_bad_backend(service):
     location = created.headers["location"]
     headers = {"Authorization": "Bearer owner"}
     assert client.get(location, headers=headers).json()["status"] == "successful"
-    complete = client.get(location + "/results", headers=headers).json()["outputs"]["converted_model"]
+    complete = client.get(location + "/results", headers=headers).json()["converted_model"]["value"]
     assert (
-        client.get(location + "/results?outputs=converted_model", headers=headers).json()["outputs"]["converted_model"]
+        client.get(location + "/results?outputs=converted_model", headers=headers).json()["converted_model"]["value"]
         == complete
     )
     assert client.get(location + "/results/converted_model", headers=headers).json() == complete
@@ -351,7 +363,7 @@ def test_upload_input_is_rejected_and_identifier_selection_is_sorted(service):
             },
         },
     )
-    model = response.json()["outputs"]["building_model"]
+    model = response.json()["building_model"]["value"]
     assert model["building_ids"] == ["0000000000000001", "0000000000000002"]
     reconstruction_download = client.get(model["artifacts"]["gpkg"]["href"])
     assert reconstruction_download.status_code == 200
@@ -364,7 +376,7 @@ def test_upload_input_is_rejected_and_identifier_selection_is_sorted(service):
             "bag": {"kind": "asset", "asset_id": model["bag_id"]},
         },
     )
-    assert reused.json()["outputs"]["building_model"]["building_ids"] == model["building_ids"]
+    assert reused.json()["building_model"]["value"]["building_ids"] == model["building_ids"]
     assert model["bag_id"] not in [identifier for owner, identifier in backend.bags if owner == "other"]
     # Disjoint polygons' one-metre buffers overlap and collectively contain footprint 1.
     wkt = "MULTIPOLYGON (((-1 -1,0.8 -1,0.8 3,-1 3,-1 -1)),((1.2 -1,3 -1,3 3,1.2 3,1.2 -1)))"
@@ -376,4 +388,4 @@ def test_upload_input_is_rejected_and_identifier_selection_is_sorted(service):
             "bag": {"kind": "area", "wkt": wkt, "crs": "EPSG:28992"},
         },
     )
-    assert response.json()["outputs"]["building_model"]["building_ids"] == ["0000000000000001"]
+    assert response.json()["building_model"]["value"]["building_ids"] == ["0000000000000001"]

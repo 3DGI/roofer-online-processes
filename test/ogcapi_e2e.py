@@ -101,8 +101,8 @@ class OGCAPIEndToEnd(unittest.TestCase):
         # Discover the service and inspect its advertised public interface.
         landing = self.get_json("/")
         links = {link["rel"]: link["href"] for link in landing["links"]}
-        self.assertIn("conformance", links)
-        self.assertIn("processes", links)
+        self.assertIn("http://www.opengis.net/def/rel/ogc/1.0/conformance", links)
+        self.assertIn("http://www.opengis.net/def/rel/ogc/1.0/processes", links)
         self.assertIn("jobs", links)
         self.assertTrue(links["service-desc"].endswith("/openapi.json"))
 
@@ -132,11 +132,14 @@ class OGCAPIEndToEnd(unittest.TestCase):
         status, _, payload, _ = self.request(
             "POST",
             f"processes/{quote('roofer:validate_point_cloud:v1', safe='')}/execution",
-            body={"inputs": {"point_clouds": [{"kind": "url", "url": "https://data.example/survey.laz"}]}},
+            body={
+                "inputs": {"point_clouds": [{"kind": "url", "url": "https://data.example/survey.laz"}]},
+                "response": "document",
+            },
             headers={"Prefer": "respond-sync"},
         )
         self.assertEqual(status, 200)
-        report = json.loads(payload)["outputs"]["validation_report"]
+        report = json.loads(payload)["validation_report"]["value"]
         self.assertTrue(report["all_ready"])
 
         # Reconstruct asynchronously, then inspect the job and both result forms.
@@ -154,9 +157,9 @@ class OGCAPIEndToEnd(unittest.TestCase):
         self.assertEqual(job["status"], "successful")
         reconstruction_results = self.get_json(f"jobs/{reconstruction['id']}/results")
         output_id = "building_model"
-        self.assertIn(output_id, reconstruction_results["outputs"])
+        self.assertIn(output_id, reconstruction_results)
         item = self.get_json(f"jobs/{reconstruction['id']}/results/{output_id}/0")
-        self.assertEqual(item, reconstruction_results["outputs"][output_id])
+        self.assertEqual(item, reconstruction_results[output_id]["value"])
 
         # Convert the fixture model asynchronously and select its result output.
         conversion_id = "roofer:convert_format:v1"
@@ -165,9 +168,9 @@ class OGCAPIEndToEnd(unittest.TestCase):
         )
         self.wait_for_success(conversion_location)
         selected = self.get_json(f"jobs/{conversion['id']}/results?{urlencode({'outputs': 'converted_model'})}")
-        self.assertEqual(list(selected["outputs"]), ["converted_model"])
+        self.assertEqual(list(selected), ["converted_model"])
         conversion_item = self.get_json(f"jobs/{conversion['id']}/results/converted_model/0")
-        self.assertEqual(conversion_item, selected["outputs"]["converted_model"])
+        self.assertEqual(conversion_item, selected["converted_model"]["value"])
 
         jobs = self.get_json("jobs")["jobs"]
         listed_ids = {job["id"] for job in jobs}

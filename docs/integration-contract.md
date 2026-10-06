@@ -7,6 +7,11 @@ Roofer processes and workflow run IDs. Authenticate job and asset operations usi
 system. Reference artifact downloads are public. Never expose filesystem paths, submitted URLs, or
 connection credentials.
 
+Synchronous execution defaults to raw output. Request `"response": "document"`
+for a JSON result document whose top-level keys are output IDs. Object values are
+qualified as `{"value": <object>}`. Job result documents use the same encoding;
+per-output links are supplied in the HTTP `Link` header.
+
 The reference service accepts demo bearer subjects (missing authorization defaults to `demo`);
 this is development behavior. Its built-in IDs are per-subject fixtures; generated resources are
 owned by their creator. Production must use the host authentication and real readiness checks.
@@ -33,7 +38,7 @@ Confirm completion through Tus offsets before submitting preparation:
 POST to `/ogcapi/processes/roofer:validate_point_cloud:v1/execution` with the authenticated bearer
 header and `Prefer: respond-async`. Follow the `Location` returned with HTTP 201 and poll it until
 `status` is `successful` or `failed`. On success GET `<Location>/results` and inspect
-`outputs.validation_report.point_clouds`. Use only entries with `ready: true` and retain their
+`validation_report.value.point_clouds`. Use only entries with `ready: true` and retain their
 `point_cloud_id`. A successful job can contain invalid/failed sources and `all_ready: false`.
 
 ## Remote preparation and existing assets
@@ -59,7 +64,7 @@ Alternatively use `{"kind":"asset","asset_id":456}` or
 `{"kind":"area","wkt":"POLYGON ((-1 -1,3 -1,3 3,-1 3,-1 -1))","crs":"EPSG:28992"}`.
 Area lookup buffers by one metre and dissolves overlaps before full footprint containment.
 Missing identifiers, empty selections and feature-limit overflow are errors, never truncated results.
-Poll the reconstruction job and GET its results. `outputs.building_model` records the resolved
+Poll the reconstruction job and GET its results. `building_model.value` records the resolved
 `bag_id`, sorted `building_ids`, model ID, available dataset date and `artifacts`.
 Download each artifact's `href` without authentication; the reference API serves the
 GeoPackage and CityJSON fixtures from `data/`.

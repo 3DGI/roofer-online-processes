@@ -91,7 +91,12 @@ class ReferenceCatalog:
                     "value": OutputDescription(
                         title="value",
                         schema={"type": "string"},
-                    )
+                    ),
+                    "length": OutputDescription(
+                        title="length",
+                        description="Number of characters in the echoed value.",
+                        schema={"type": "integer", "minimum": 0},
+                    ),
                 },
                 jobControlOptions=[JobControlOption.execute_async, JobControlOption.execute_sync],
                 outputTransmission=[TransmissionMode.value],
@@ -218,7 +223,10 @@ class ReferenceBackend:
         if process_id == "echo":
             self._counter += 1
             upstream_id = f"reference-{self._counter}"
-            self._results[upstream_id] = (subject, Results(outputs={"value": inputs["value"]}))
+            self._results[upstream_id] = (
+                subject,
+                Results(outputs={"value": inputs["value"], "length": len(inputs["value"])}),
+            )
             return ReferenceSubmission(
                 upstream_id,
                 StatusCode.successful if mode == JobControlOption.execute_sync else StatusCode.accepted,

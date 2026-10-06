@@ -32,7 +32,16 @@ point this runner at a production service unless that is specifically intended.
 
 The suite requires an echo process ID. This API already advertises `echo`, but
 it previously could not execute it through the Roofer-only contract adapter;
-the echo input and output are now passed through as strings for ETS execution.
+the echo process returns the input string and its character count. With the default
+`response: raw`, both outputs are returned as `multipart/related`, with a `text/plain`
+part for the string and an `application/json` part for the count. Selecting only
+`value` returns `text/plain`. This exercises raw output transmission without the
+ETS 1.3 synchronous JSON schema's overlapping `oneOf` branches. The validator is
+unchanged, and both synchronous and asynchronous echo execution remain available.
+
+Request `response: document` for a JSON result document. Output IDs are its top-level
+keys; object output values are qualified as `{"value": <object>}`. Job result
+documents use the same encoding, with per-output links in the HTTP `Link` header.
 
 This is a compliance check for the published Processes 1.0 Part 1 suite. The
 existing `just ogc-lint` command remains complementary: it checks the generated

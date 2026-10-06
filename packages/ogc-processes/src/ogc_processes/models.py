@@ -45,8 +45,6 @@ class Link(BaseModel):
     type: str | None = None
     title: str | None = None
 
-    model_config = {"exclude_none": True}
-
 
 class LandingPage(BaseModel):
     """OGC API landing page."""
@@ -112,11 +110,18 @@ class ProcessList(BaseModel):
     links: list[Link]
 
 
+class OutputOptions(BaseModel):
+    """Requested output transmission."""
+
+    transmissionMode: TransmissionMode = TransmissionMode.value
+
+
 class ExecuteRequest(BaseModel):
     """Execution request accepted by the Core endpoint."""
 
     inputs: dict[str, Any] = Field(default_factory=dict)
-    response: ResponseType | None = None
+    outputs: dict[str, OutputOptions] | None = None
+    response: ResponseType = ResponseType.raw
     subscriber: dict[str, Any] | None = None
 
 
