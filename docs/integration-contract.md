@@ -1,106 +1,81 @@
 # Roofer Online integration contract
 
-The reusable protocol app requires a catalog, execution backend, job store, authenticator and
-contract validator. The Roofer models in `api.process_contracts` define the four public contracts.
-Invoke host application services internally and persist owned OGC jobs/results with mappings to
-Roofer processes and workflow run IDs. Authenticate job and asset operations using the host user
-system. Reference artifact downloads are public. Never expose filesystem paths, submitted URLs, or
-connection credentials.
+Status updated on 2026-10-06. The current service is a deterministic reference
+host with three published Roofer processes plus `echo`. **3DCityDB export is
+intentionally deferred and unavailable through the public API.**
 
-Synchronous execution defaults to raw output. Request `"response": "document"`
-for a JSON result document whose top-level keys are output IDs. Object values are
-qualified as `{"value": <object>}`. Job result documents use the same encoding;
-per-output links are supplied in the HTTP `Link` header.
+## Injected host interfaces
 
-The reference service accepts demo bearer subjects (missing authorization defaults to `demo`);
-this is development behavior. Its built-in IDs are per-subject fixtures; generated resources are
-owned by their creator. Production must use the host authentication and real readiness checks.
-Demo point-cloud IDs 1, 123, 124, BAG IDs 2/456 and model ID 789 are available. Registered complete
-upload 123, incomplete upload 125, and remote URLs `https://data.example/survey.laz`,
-`https://data.example/invalid.laz`, `https://data.example/failed.laz` exercise readiness/invalid/failure.
-Other remote URLs safely fail without being downloaded. BAG pand fixture identifiers are
-`0000000000000001` through `0000000000000003`, with footprints at x=0–2, 4–6, 8–10 and y=0–2.
-The fixture BAG dataset date is 2026-01-01. Artifact base URL is configurable on ReferenceBackend.
+`create_app` requires `catalog`, `backend`, `store`, `authenticator`, and `validator`.
+Their protocols are in `packages/ogc-processes/src/ogc_processes/interfaces.py`.
 
-## Local upload workflow
+| Interface | Host responsibility |
+| --- | --- |
+| `ProcessCatalog` | List and describe only available processes and their capabilities |
+| `ProcessContractValidator` | Validate/normalize inputs before submission and outputs before projection |
+| `Authenticator` | Resolve a verified host principal from authorization |
+| `ExecutionBackend` | Submit using normalized inputs, subject and mode; expose status and results |
+| `JobStore` | Create/get/list/update owned public jobs and their upstream mapping |
 
-Use the host's authenticated [Tus service](https://tus.io/protocols/resumable-upload) to create
-and complete an upload. The production adapter must add creation metadata `processing=ogc`
-(encoded as `Upload-Metadata: processing b2dj` alongside existing required metadata).
-OGC uploads transfer bytes without automatically starting metadata validation. Omitted flags retain
-today's automatic UI processing. This flag and byte-transfer service are not implemented here.
-Confirm completion through Tus offsets before submitting preparation:
+Invoke host application services internally. Persist public jobs and results with
+owner, Roofer process/model/asset IDs, workflow run ID, and stable timestamps.
+Scope every read and input resolution to authorized users. Handle the gap between
+submission and mapping persistence. Required artifacts/materializations must exist
+before terminal success. Translate execution failures into failed jobs and reject
+invalid inputs before launching work.
 
-```json
-{"inputs":{"point_clouds":[{"kind":"upload","upload_url":"https://roofer.example/api/v1/pointcloud/upload/123"}]}}
-```
+The protocol has no cancellation interface. Its model accepts subscribers but
+provides no callback dispatch. Advertise only implemented modes/transmission and
+conformance classes. For async-only production processes, clients currently need
+`Prefer: respond-async` because the router otherwise selects sync.
 
-POST to `/ogcapi/processes/roofer:validate_point_cloud:v1/execution` with the authenticated bearer
-header and `Prefer: respond-async`. Follow the `Location` returned with HTTP 201 and poll it until
-`status` is `successful` or `failed`. On success GET `<Location>/results` and inspect
-`validation_report.value.point_clouds`. Use only entries with `ready: true` and retain their
-`point_cloud_id`. A successful job can contain invalid/failed sources and `all_ready: false`.
+## Current reference contracts
 
-## Remote preparation and existing assets
+Execute requests wrap values in `inputs`; there is no execute-body `mode` field.
+See [examples.md](examples.md) for a complete reference workflow.
 
-The same process accepts a public or presigned HTTP(S) LAS/LAZ URL, without extra credentials:
+- Preparation accepts only URL sources, with no extra remote credentials. Upload
+  and existing-asset source forms return 400. It currently waits five seconds and
+  reports every URL ready without fetching it, allocating new owned fixture IDs.
+- Reconstruction requires ready point-cloud IDs and a `bag` asset/buildings/area
+  selector. Area WKT is Polygon/MultiPolygon in EPSG:28992, buffered one metre for
+  full footprint containment. Missing/empty/over-limit selections fail. Results
+  record resolved BAG ID, sorted building IDs and available dataset date; they do
+  not promise an immutable geometry snapshot.
+- Conversion accepts a model ID and unique `cityjson`/`gpkg` formats. Results link
+  to the public fixture files; no conversion engine runs.
 
-```json
-{"inputs":{"point_clouds":[{"kind":"url","url":"https://data.example/survey.laz"},{"kind":"asset","asset_id":124}]}}
-```
+The reference authenticator uses arbitrary bearer text as subject, defaulting to
+`demo`. Built-in cloud IDs 1/123/124, BAG IDs 2/456 and model ID 789 are available
+per subject. Generated resources remain owned by their creator. Fixture building
+IDs are `0000000000000001` through `0000000000000003`, with footprints at x=0–2,
+4–6, 8–10 and y=0–2, and dataset date 2026-01-01. There is no registered-upload
+fixture or special invalid/failed URL behavior in the current backend.
 
-Poll preparation as above. Reports never echo URLs or credentials. Successfully prepared remote
-sources create owned point-cloud assets, reusable even when another source fails.
+Synchronous output defaults to raw. `response: document` returns output IDs at
+the root and qualifies object values as `{"value": ...}`. Job result documents
+use the same representation; HTTP Link headers identify individual output routes.
+Catalog transmission is value-only: nested artifact links do not implement OGC
+reference transmission. Reference downloads need no authentication; production
+must enforce host access rules or use signed links.
 
-## Reconstruction and downloads
+## Required production work
 
-POST `/ogcapi/processes/roofer:reconstruct_buildings:v1/execution` with ready IDs and a selector:
+- Implement remote retrieval with byte/time limits, redirect/target checks, and
+  confidential presigned URL handling. Never forward host authorization. Syntax
+  validation alone does not authorize a network target.
+- Inspect real point clouds and preserve successful owned assets through partial
+  batch failure. The report contract supports invalid/failed outcomes and
+  `all_ready: false`; a completed report can still be a successful OGC job.
+- Resolve authoritative BAG selections and enforce ownership, readiness, compatible
+  CRS, complete identifier resolution and feature limits.
+- Submit actual reconstruction and independent conversion workflows, retain durable
+  mapping/results, and produce retrievable authorized artifacts.
+- Use real authentication, stable lifecycle mapping, restart recovery, and safe
+  diagnostics that omit source URLs, credentials and filesystem paths.
 
-```json
-{"inputs":{"point_cloud_ids":[123],"bag":{"kind":"buildings","building_ids":["0000000000000001"]},"name":"Demo","config":{}}}
-```
-
-Alternatively use `{"kind":"asset","asset_id":456}` or
-`{"kind":"area","wkt":"POLYGON ((-1 -1,3 -1,3 3,-1 3,-1 -1))","crs":"EPSG:28992"}`.
-Area lookup buffers by one metre and dissolves overlaps before full footprint containment.
-Missing identifiers, empty selections and feature-limit overflow are errors, never truncated results.
-Poll the reconstruction job and GET its results. `building_model.value` records the resolved
-`bag_id`, sorted `building_ids`, model ID, available dataset date and `artifacts`.
-Download each artifact's `href` without authentication; the reference API serves the
-GeoPackage and CityJSON fixtures from `data/`.
-Resolved selection does not promise an immutable BAG geometry snapshot.
-
-Conversion and export examples:
-
-```json
-{"inputs":{"model_3d_id":789,"formats":["cityjson","gpkg"]}}
-```
-
-```json
-{"inputs":{"model_3d_id":789,"sharedProfileId":"municipality-citydb","importMode":"import_all","reasonForUpdate":"DTaaS testbed","updatingPerson":"operator"}}
-```
-
-Submit to `roofer:convert_format:v1` and `roofer:export_to_3dcitydb:v1` respectively.
-Outputs are `converted_model` (model ID/artifacts) and `export_receipt` (model ID/completed,
-optional profile/count). The reference API currently supports the `cityjson` and `gpkg` fixture
-artifacts, included in its runtime Docker image from `data/`. Artifact links are public.
-Explicit CityDB connections use
-`host`, strict `port` (1–65535), `database`, `user`, `password`, optional `schema` (citydb),
-`useSSL` (false). A shared profile takes precedence and removes explicit connection settings.
-`importMode` supports `import_all`, `skip`, `delete`, `terminate`. Credentials are transient.
-
-## Required production adapter changes
-
-- Implement the upload metadata flag described above; resolve uploads internally with ownership
-  and completion checks before creating jobs.
-- Check ownership, readiness and CRS compatibility for all point clouds, BAG assets and models.
-- Implement remote ingestion with byte/time/download limits, target and redirect checks, and
-  confidential presigned URL handling. Never forward Roofer authorization or accept extra remote
-  credentials. Persist successful sources through partial preparation failures.
-- Reuse host BAG resolution and asset-creation services. Enforce complete selections instead of
-  today's capped lookup; reject missing IDs and feature-limit overflow.
-- Advertise asynchronous execution for production preparation and reconstruction; implement
-  actual workflows, standalone conversion, safe CityDB receipts, durable mapping and results.
-- Map accepted/running/successful/failed states and reporting-workflow failure. Cancellation,
-  callbacks and output transmission negotiation remain separate milestones; do not advertise
-  unsupported extensions.
+Tus `processing=ogc` metadata and upload/asset preparation were earlier proposals.
+Neither is implemented or accepted here. Adding them requires public schema and
+adapter work; retain them as future options rather than client instructions.
+3DCityDB credentials/receipts remain deferred scaffolding and are excluded from
+current adapter acceptance. See [next-implementation-steps.md](next-implementation-steps.md).

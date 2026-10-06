@@ -27,3 +27,26 @@ To form a direct URL, replace `{directory}` and `{filename}` in the pattern with
 ```text
 https://raw.githubusercontent.com/opengeospatial/ogcapi-processes/refs/heads/master/openapi/schemas/processes-core/inputDescription.yaml
 ```
+
+## Local implementation status (2026-10-06)
+
+The upstream links above are reference material, not the authoritative contract
+for this service. Current protocol models are in
+`packages/ogc-processes/src/ogc_processes/models.py`; Roofer runtime contracts and
+JSON Schema generation are in `apps/api/src/api/process_contracts.py`.
+
+Read `/ogcapi/openapi.json` for the advertised OpenAPI 3.0.3 surface and
+`/ogcapi/processes/{process_id}` for named input/output schemas and the complete
+Roofer `inputsSchema` extension. Named input schemas include only their referenced
+`$defs` dependencies; the full input schema captures constraints across inputs.
+Runtime validation also enforces rules such as geometric validity and output
+consistency that clients should not infer from schema validation alone.
+
+Preparation accepts URL sources only. Conversion and artifact keys support only
+`cityjson` and `gpkg`. Export models remain in source, but 3DCityDB export is
+intentionally deferred and unpublished. Catalog availability, rather than the
+presence of a Python model or registry entry, determines executable processes.
+
+The OGC linter and compliance checks are fully green, as confirmed by the project
+owner; they were not rerun during this review. See [implementation.md](implementation.md)
+for the API behavior and [examples.md](examples.md) for current requests.

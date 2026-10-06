@@ -1,178 +1,114 @@
-# OGC API Processes and Roofer Online Gap Analysis
+# OGC API Processes and Roofer Online gap analysis
 
-## Scope
+Assessment date: 2026-10-06. This review covers the implementation, API, tests,
+CI configuration, and plans in this repository. Earlier observations about the
+Roofer host and sibling integration workspace are historical context, not a
+fresh assessment of those repositories.
 
-This report maps the four processes promised in the DTaaS proposal to the current Roofer Online API and workflow implementation. It defines the adapter required to expose those capabilities through OGC API Processes.
+## Current scope and verification
 
-## Standards baseline and verification result
+The protocol application targets OGC API - Processes Part 1 v2 and advertises
+v1 compatibility. `/conformance` declares Core, JSON, OGC process description,
+and Job list for both versions. The Geonovum v2 OGC linter and the TEAM Engine
+v1 compliance suite are fully green, as confirmed by the project owner. Both
+have CI workflows. Neither was rerun during this documentation review.
 
-The implementation target is **OGC API - Processes Version 2**, primarily Part 1: Core v2.0 ([18-062r3](https://docs.ogc.org/DRAFTS/18-062r3.html)) and, where dynamic process lifecycle is required, Part 2 ([20-044](https://docs.ogc.org/DRAFTS/20-044.html)). Both documents are currently drafts and are being implemented deliberately as draft specifications. The approved Part 1 1.0.0 document ([18-062r2](https://docs.ogc.org/is/18-062r2/18-062r2.html)) remains the compatibility baseline.
+The proposal included four Roofer processes. Current delivery covers three
+published Roofer contracts plus the `echo` conformance fixture. **3DCityDB export
+is intentionally postponed and excluded from the current delivery milestone.**
+It is not an active implementation gap. Part 2 dynamic deployment, dismissal,
+and callbacks are not advertised by the current service.
 
-The host-side conclusions below are sound: validation against an existing asset and independent format conversion need host operations, while reconstruction and CityDB export already have backend workflows that can be adapted. The protocol constraints are:
+## Implementation compared with the plans
 
-- Part 1 Core requires the landing page, conformance declaration, process list and descriptions, process execution, and job status/results. The `/jobs` collection is the optional Job list conformance class, not a Core requirement.
-- Version 2 does not require exposing Part 2 lifecycle operations for a fixed catalog. Part 2 applies only when the server dynamically deploys, replaces, or undeploys process definitions; a fixed Roofer catalog can implement Part 1 v2 without those mutating endpoints.
-- An OGC execute request wraps process-specific values in an `inputs` object. The examples below show process values; the adapter must wrap each one as `{"inputs": <process-specific-values>}` in the OGC execute request.
-- Execution mode is negotiated from `jobControlOptions` and the HTTP `Prefer` header (`respond-sync` or `respond-async`); `mode` is not a v2 Part 1 execute-body field. Existing long-running Dagster workflows should use asynchronous execution.
-- OGC job status values are `accepted`, `running`, `successful`, `failed`, and `dismissed`. `dismissed` is part of the optional Dismiss conformance class, so cancellation is required only if that extension is advertised.
-- Process outputs must be declared in the process description and returned by value or reference according to the advertised transmission mode. Artifact links may point to authenticated Roofer download URLs, but local filesystem URIs must not be exposed.
-
-The earlier assessment described a reusable package shaped around the approved 1.0 wire model: it used jobID, omitted the v2 processingEntityType, and declared 1.0 conformance URIs. The current protocol implements v2 status fields, conformance URIs and Prefer negotiation. The v2 draft preserves the core resource and execution model, but its status schema uses id and requires processingEntityType; these fields are now implemented even when a v1 validator is used as a compatibility gate.
-
-## Compatibility validation strategy
-
-The official OGC Processes validator currently targets the approved 1.0.0 conformance suite, while the Geonovum checker lists both 1.0.0 final and 2.0.0 draft support. Run the v1 validator as a backwards-compatibility regression gate, and run the v2 draft checker/tests as the authoritative conformance check for v2-only fields and requirements. A v1 pass demonstrates compatibility with the v1 subset; it does not by itself prove full v2 conformance.
-
-## Current Roofer Online API
-
-Roofer Online is a FastAPI application backed by SQLAlchemy models and Dagster. Users and assets are authenticated through Authgear JWTs. `Asset` is the base entity for point clouds, BAG data, and 3D models. `Process` tracks a user-owned background operation and contains a process type, status, optional asset ID, optional Dagster run ID, error message, and timestamps. The internal process types are `point-cloud-upload`, `reconstruction`, and `3dcitydb-export`; there is no internal process type for format conversion or standalone point-cloud validation.
-
-Relevant endpoints:
-
-| Capability | Existing endpoint | Current behavior |
+| Capability | Current evidence | Remaining work |
 | --- | --- | --- |
-| Point-cloud upload and metadata | `POST /api/v1/pointcloud/upload`, `PATCH /api/v1/pointcloud/upload/{upload_id}` | Creates a `PointCloud` and a `point-cloud-upload` `Process`. When the Tus upload completes, a background task submits the Dagster `pointcloud` job. |
-| Point-cloud status | `GET /api/v1/processes/{process_id}/status` | Polls Dagster, maps the run to `ok`, `in-progress`, or `error`, and writes LAS metadata, bounds, density, and asset status on success. |
-| Reconstruction submission | `POST /api/v1/reconstruction/start` | Validates owned point-cloud and BAG IDs, creates a `Model3D` and a `reconstruction` `Process`, then submits the Dagster `reconstruct` job in a background task. |
-| Reconstruction status | `GET /api/v1/processes/{process_id}/status` | Polls the stored Dagster run and materializations. On completion it stores model metadata, export URIs, storage size, and model status. |
-| Reconstruction assets | `GET /api/v1/reconstructions`, `GET /api/v1/pointclouds` | Lists only the authenticated user’s assets. |
-| Format downloads | `GET /api/v1/reconstruction/{model_3d_id}/export/{format}` | Serves stored ZIP artifacts for `obj`, `gpkg`, `cityjson`, `cityjson_terrain`, and `3dtiles`. |
-| 3D Tiles files | `GET /api/v1/reconstruction/{model_3d_id}/3dtiles/{lod}/{file}` | Serves individual tileset files for `lod12`, `lod13`, and `lod22`. |
-| CityDB profiles | `GET /api/v1/3dcitydb/connection-profiles` | Lists shared profiles without passwords. |
-| CityDB export | `POST /api/v1/reconstruction/{model_3d_id}/export/3dcitydb` | Validates ownership, model status, CityJSON availability, and target policy, then submits the Dagster `job_export_3dcitydb` job and creates a `3dcitydb-export` process. Credentials are passed to Dagster but are not stored in the process record. |
-| Process list/status | `GET /api/v1/processes`, `GET /api/v1/processes/{process_id}/status` | Lists and polls processes for the authenticated user. Status values are `ok`, `in-progress`, and `error`. |
+| Protocol boundary | Injected interfaces in `packages/ogc-processes/src/ogc_processes/interfaces.py`; no Roofer or Dagster imports in the protocol package | Implement production host services behind those interfaces |
+| Discovery and schemas | `ReferenceCatalog` publishes `echo`, validation, reconstruction, conversion; named inputs and complete `inputsSchema` derive from Pydantic contracts | Keep descriptions and runtime behavior aligned when extending scope |
+| Execute and results | Sync/raw/document, async 201 with Location, job polling, output selection and individual output routes | Real background execution, durable status and results |
+| Job listing | Subject isolation, type/process/status/datetime/duration filters and bounded limit | Robust datetime validation, stable lifecycle timestamps, pagination |
+| Validation/preparation | URL-only nonempty unique source list; ordered typed report; fixture always reports ready | Secure remote ingestion, actual metadata/validation and partial outcomes |
+| Reconstruction | Ready fixture IDs; BAG asset/building/area selectors; buffered containment and selection limits; fixture model/artifact result | Authoritative BAG resolution, ownership/CRS checks and real reconstruction |
+| Conversion | Existing fixture/generated model; only `cityjson` and `gpkg`; retrievable fixture downloads | Independent conversion workflow and durable artifact records |
+| Authentication/storage | Demo bearer identities and in-memory subject-scoped jobs/results | Roofer authentication, persistent job/run/asset mapping and authorized downloads |
+| 3DCityDB | Contract and backend scaffolding retained; catalog deliberately skips it; public description/execution return 404 | Deferred; reconsider only when explicitly restoring this scope |
+| Standards checks | OGC linter and compliance fully green; CI configured | Maintain existing gates during changes; production integration needs separate evidence |
 
-## Gaps by proposed process
+The former claims that inputs are generic, empty reconstruction requests succeed,
+results are placeholder URNs, v2 fields are missing, and compliance automation is
+unfinished no longer describe the current implementation.
+
+## Domain gaps
 
 ### `roofer:validate_point_cloud:v1`
 
-There is no validation endpoint. Validation is an implicit post-upload operation: the completed Tus upload starts Dagster `pointcloud`, whose `pointcloud_metadata` asset runs `lasinfo`; the status poll copies LAS metadata into the point-cloud asset. The existing process is named `point-cloud-upload`, so it represents ingestion and validation together and cannot be submitted against an existing asset through a process-specific API.
+The current input is `point_clouds: [{kind: "url", url: "https://..."}]`.
+Upload sources and existing-asset sources are rejected. Syntax validation accepts
+HTTP(S) URLs with a hostname and rejects embedded credentials/fragments; it does
+not check reachability or LAS/LAZ content. The backend sleeps five seconds during
+submission, creates fresh owned fixture IDs for every URL, and reports every
+source as ready without downloading it, including URLs named `invalid.laz` or
+`failed.laz`. Async submission still performs this work before returning 201.
 
-The implemented public preparation contract accepts a nonempty `point_clouds` array of
-`upload`/`upload_url`, `asset`/`asset_id`, or `url`/`url` sources. The host adapter must resolve
-owned complete uploads internally, validate existing assets, and securely ingest remote LAS/LAZ.
-Add Tus creation metadata `processing=ogc` so byte completion does not automatically start UI
-validation; omission preserves today's behavior. A completed ordered `validation_report` is a
-successful OGC job even with invalid/failed sources and `all_ready: false`. Successful assets
-remain reusable; only reporting-workflow failure makes the job fail. Safe diagnostics omit URLs.
-
-```json
-{"inputs":{"point_clouds":[{"kind":"upload","upload_url":"https://roofer.example/api/v1/pointcloud/upload/123"},{"kind":"url","url":"https://data.example/survey.laz"}]}}
-```
-
-The current Dagster asset accepts one `pointcloud_path` and one `asset_id`; multiple IDs require one run per asset or a new batch operation.
+The output contract supports ready/invalid/failed source outcomes and consistent
+`all_ready`, but the reference backend does not exercise real failures. Production
+must ingest safely, inspect point-cloud data, preserve successful sources through
+partial failures, and distinguish a completed report from reporting-workflow failure.
+Tus integration and asset-based preparation require a future public-contract change.
 
 ### `roofer:reconstruct_buildings:v1`
 
-`POST /api/v1/reconstruction/start` is a direct backend for this process. It accepts `point_cloud_ids`, `bag_id`, optional `name`, and a free-form Roofer `config`. It validates asset existence and owner/admin access, creates the model and process rows, and submits Dagster `reconstruct` with the point-cloud paths, BAG view, model ID/name, and configuration.
+The implemented inputs are `point_cloud_ids`, required `bag`, optional `name`, and
+free-form finite JSON `config`. `bag` selects an asset, explicit building IDs,
+or valid Polygon/MultiPolygon WKT in EPSG:28992. Fixture geometry is buffered by
+one metre before full footprint containment; missing IDs, empty selections and
+feature-limit overflow are rejected. Results contain a model ID, BAG ID, sorted
+building IDs, fixture dataset date, and CityJSON/GeoPackage links.
 
-The existing Dagster `reconstruct` job is broader than reconstruction: its selection includes `reconstructed_building_models`, `export_cesium3dtiles`, and `export_multiformat`. The OGC adapter can call this operation and return all materialized outputs, or the host must split reconstruction from export if independent execution is required.
-
-The current response already supplies the internal identifiers needed by the adapter: `model_3d_id` and `process_id`. The adapter must associate one public OGC job ID with both, plus the Dagster run ID once the background submission completes. Polling uses the process status endpoint and materialization metadata. Results reference the authenticated download endpoints rather than exposing filesystem URIs.
-
-Process-specific input values (to be placed under the OGC execute request `inputs` member):
-
-```json
-{
-  "point_cloud_ids": [123, 124],
-  "bag": {"kind": "buildings", "building_ids": ["0000000000000001"]},
-  "name": "Nijmegen centrum",
-  "config": {}
-}
-```
-
-The public contract now requires `bag`, discriminated as owned `asset`, explicit `buildings`,
-or Polygon/MultiPolygon `area` in EPSG:28992. Buffer areas by one metre, dissolve overlaps,
-and select fully contained footprints. Host services must create an owned BAG selection and
-reject empty selections, missing identifiers, and configured limits without capped truncation.
-Results record resolved BAG ID, sorted identifiers and available dataset date alongside model
-artifacts; they do not promise immutable geometry. The reference uses deterministic fixtures.
-Remote ingestion limits, target/redirect checks and confidential URL handling remain adapter work.
-
-The current implementation is asynchronous. There is no bounded synchronous reconstruction endpoint.
+This demonstrates the contract rather than invoking Roofer or Dagster. The
+production adapter must resolve authoritative data, check all ownership/readiness
+and CRS requirements, submit the actual workflow, and require its expected
+materializations/artifacts before reporting success. Resolved identifiers and a
+dataset date do not promise an immutable geometry snapshot.
 
 ### `roofer:convert_format:v1`
 
-There is no standalone conversion endpoint or process record. Format generation is currently part of the reconstruction Dagster job. `export_multiformat` produces OBJ, GeoPackage, CityJSON, and optional terrain CityJSON ZIPs; `export_cesium3dtiles` produces 3D Tiles files and a ZIP. Their URIs are merged into `Model3D.asset_metadata`, and the download endpoint resolves them from the model metadata.
+The current format enum is exactly `cityjson` and `gpkg`. OBJ, terrain CityJSON,
+and 3D Tiles are outside the current public contract. Reference execution registers
+requested formats for a fixture model and returns links to static files. A production
+adapter still needs independent conversion of an existing owned ready model,
+without rerunning reconstruction, and persistent records for requested outputs.
 
-The OGC process requires a new host operation. It should accept an existing `model_3d_id`, validate ownership and `ok` status, accept a list of supported formats, submit a dedicated Dagster conversion job, and create a process row with a conversion type. The job should reference the existing model’s reconstruction output and publish artifact URIs into a durable result record. Reusing the reconstruction job for this operation would incorrectly rerun reconstruction and would not provide independent conversion semantics.
+### Deferred `roofer:export_to_3dcitydb:v1`
 
-Process-specific input values (to be placed under the OGC execute request `inputs` member):
+`ExportInputs`, `ExportReceipt`, a registry example, and a fake backend branch remain
+in source. Their presence does not make this an available API process. Future work
+would need host target authorization, transient credential handling, actual export,
+and durable receipts. No export deliverable or export acceptance check is required
+for the current milestone.
 
-```json
-{"model_3d_id": 789, "formats": ["cityjson", "obj", "gpkg", "3dtiles"]}
-```
+## Protocol limitations and production boundaries
 
-Supported format identifiers are `obj`, `gpkg`, `cityjson`, `cityjson_terrain`, and `3dtiles`. The OGC result should contain one reference per requested format.
+- `subscriber` is accepted but ignored; there is no callback delivery.
+- Catalog entries advertise only `outputTransmission: ["value"]`. Reference requests
+  are rejected before submission. Artifact `href` fields are nested domain values,
+  not negotiated OGC reference transmission.
+- No DELETE job route, dismissed status, cancellation interface, or Part 2 routes exist.
+- Prefer handling selects async when `respond-async` appears, otherwise sync;
+  conflicting preferences and wait negotiation are not handled explicitly.
+- Job/process collections truncate to `limit` without next links or offset/cursor support.
+- Datetime parsing can turn invalid values into an unbounded/no-match filter;
+  comparing timezone-naive input to aware timestamps can raise an error. Reversed
+  intervals are not explicitly rejected.
+- The fake status method recreates started/finished times on each poll. The paused
+  `echo` fixture remains running with unavailable results until state is cleared and
+  reports a finished timestamp while running. These are fixture lifecycle limitations.
+- Subject isolation applies to jobs and generated fixture records. Downloads are public
+  and check model/format registration across subjects; production artifact authorization
+  is still required.
+- Workflow submission and job-store creation are separate calls. A persistent adapter
+  must prevent or recover from untracked runs if saving the public mapping fails.
 
-### `roofer:export_to_3dcitydb:v1`
-
-`POST /api/v1/reconstruction/{model_3d_id}/export/3dcitydb` implements the required backend operation. It accepts either a shared profile ID or complete connection parameters, validates the model owner, requires model status `ok`, requires the stored CityJSON export, validates the target host, and submits Dagster `job_export_3dcitydb`. The process row has no asset ID and stores the Dagster run ID.
-
-The endpoint returns a Dagster run ID but does not return the newly created internal process ID. The OGC adapter must retain that process ID when invoking the operation, or the endpoint must return it. Status is available through the generic process endpoint. The current process status has no successful export result other than the Dagster materialization log, so the adapter needs a result record containing the model ID, target profile identifier, completion state, and export summary.
-
-Process-specific input values (to be placed under the OGC execute request `inputs` member):
-
-```json
-{
-  "model_3d_id": 789,
-  "sharedProfileId": "municipality-citydb",
-  "importMode": "import_all",
-  "reasonForUpdate": "DTaaS testbed",
-  "updatingPerson": "operator"
-}
-```
-
-Explicit connection parameters are also accepted by the internal API. They must be handled as transient execution data and excluded from OGC job resources, results, process metadata, and logs.
-
-## OGC-to-Roofer adapter
-
-The wrapper should be mounted in the Roofer Online FastAPI application and use its existing authentication and database session. It should not call Roofer’s HTTP endpoints from inside the same application. The adapter should invoke the existing service/background functions or a new application service that shares their models and authorization checks.
-
-The public resource model is separate from the internal model:
-
-| OGC resource | Roofer mapping |
-| --- | --- |
-| Process ID | Static adapter catalog entry, not a Roofer `ProcessType` value |
-| OGC job ID | New durable mapping row containing OGC ID, Roofer process ID, model ID, Dagster run ID, owner, and requested process ID |
-| Job owner | Authenticated JWT subject, checked against all referenced assets and the mapped process |
-| `accepted` | OGC submission accepted and internal process created; Dagster run may not yet exist |
-| `running` | Internal process is `in-progress` and the Dagster run is active or queued |
-| `successful` | Internal process is `ok` and required materializations/artifacts are available |
-| `failed` | Internal process is `error`, Dagster run failed, or a required materialization is missing |
-| `dismissed` | Optional Part 1 Dismiss extension. If advertised, requires a cancellation operation that terminates the Dagster run and records dismissal; no current Roofer endpoint provides this |
-| OGC results | References generated through authenticated Roofer download routes or signed artifact URLs |
-
-The OGC execution endpoint should advertise asynchronous execution for the existing reconstruction, conversion, CityDB, and validation Dagster workflows. A new bounded host operation may additionally advertise synchronous execution. The adapter should negotiate the selected mode using the HTTP `Prefer` header and return `201 Created` plus `Location` for asynchronous executions; a successful synchronous execution returns the requested output representation directly.
-
-## Required Roofer Online changes
-
-1. Add an application service for OGC submissions instead of coupling the wrapper to route handlers and `BackgroundTasks`.
-2. Add source preparation for completed uploads, existing assets and secure remote URLs.
-3. Add a standalone conversion Dagster job and process type for existing models.
-4. Return the internal process ID from CityDB export submission, or provide a service-level return object containing it.
-5. Add durable OGC job mapping and result persistence.
-6. If the optional Dismiss conformance class is advertised, add a cancellation operation that maps OGC dismissal to Dagster cancellation and records the terminal state.
-7. Expose artifact references through stable authenticated URLs; do not expose local `uri` values directly.
-8. Preserve the existing JWT and owner/admin checks for every input asset, model, process, and job.
-9. Normalize internal `ok`, `in-progress`, and `error` plus Dagster run states into the OGC job lifecycle and retain detailed error messages for failed jobs. Invalid input should be rejected as an execute exception before creating a job; execution-time failures should become `failed` jobs.
-10. Retain the implemented v2 protocol fields, Prefer negotiation and OpenAPI schemas; continue conformance verification.
-
-
-## Part 1 and Part 2 endpoint crosswalk
-
-For the fixed Roofer catalog, the public adapter needs these Part 1 resources:
-
-| OGC operation | Adapter responsibility |
-| --- | --- |
-| `GET /` | Link to the API definition, `/conformance`, and `/processes`; optionally `/jobs` if Job list is implemented |
-| `GET /conformance` | Declare exactly the implemented Part 1 conformance classes |
-| `GET /processes` | List the four stable public process identifiers and descriptions |
-| `GET /processes/{processID}` | Describe named inputs, JSON schemas, outputs, job control options, transmission modes, and links |
-| `POST /processes/{processID}/execution` | Validate inputs and authorization, submit the host workflow, and return a synchronous result or asynchronous job status with `Location` |
-| `GET /jobs/{jobID}` | Return current OGC status and links, scoped to the authenticated owner |
-| `GET /jobs/{jobID}/results` | Return declared output values or references after successful completion |
-
-`GET /jobs` may be added and is already part of the proposed adapter contract, but it should be advertised as the Job list conformance class only after implementing its required filtering and response behavior.
-
-Part 2 adds `POST /processes`, `PUT /processes/{processID}`, `DELETE /processes/{processID}`, and `GET /processes/{processID}/package` for dynamic process lifecycle management. Those operations are out of scope for the four fixed Roofer workflows. If added later, the server must distinguish immutable built-in processes from mutable dynamically deployed ones and enforce the stronger deployment authorization described by [Part 2](https://docs.ogc.org/DRAFTS/20-044.html).
+These findings do not change the reported green OGC checks; they define the
+remaining runtime and production integration work. See
+[next-implementation-steps.md](next-implementation-steps.md) for priorities.
