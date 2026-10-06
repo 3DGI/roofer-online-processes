@@ -118,9 +118,7 @@ class ReferenceCatalog:
                         name: InputDescription(
                             title=name,
                             schema={
-                                "type": "object",
-                                "properties": {name: field},
-                                "required": [name] if name in schema.get("required", []) else [],
+                                **field,
                                 **{"$defs": referenced_definitions(field, definitions)},
                             },
                             minOccurs=1 if name in schema.get("required", []) else 0,
