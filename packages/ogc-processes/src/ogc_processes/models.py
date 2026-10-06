@@ -153,7 +153,11 @@ class Results(BaseModel):
 
 
 class ExceptionReport(BaseModel):
-    """OGC API 1.0 exception response."""
+    """OGC API 1.0 RFC 7807 exception response."""
 
-    code: str
-    description: str
+    type: str
+    title: str
+    status: int
+    detail: str
+    code: str | None = None
+    description: str | None = None
