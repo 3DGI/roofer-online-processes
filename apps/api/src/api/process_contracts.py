@@ -318,7 +318,12 @@ class RooferContractValidator:
 
     def validate_results(self, process_id: str, results: Results) -> Results:
         if process_id == "echo":
-            if set(results.outputs) != {"value"} or not isinstance(results.outputs["value"], str):
+            if (
+                set(results.outputs) != {"value", "length"}
+                or not isinstance(results.outputs["value"], str)
+                or type(results.outputs["length"]) is not int
+                or results.outputs["length"] != len(results.outputs["value"])
+            ):
                 raise ContractViolation("Invalid echo results.")
             return results
         contract = CONTRACTS[process_id]

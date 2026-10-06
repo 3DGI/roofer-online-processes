@@ -1,3 +1,6 @@
+from email import policy
+from email.parser import BytesParser
+
 from api.main import app
 from fastapi import Request
 from fastapi.testclient import TestClient
@@ -78,22 +81,38 @@ def test_async_execution_returns_job_location() -> None:
     assert all("title" not in link for link in response.json()["links"])
 
 
-def test_execution_defaults_to_sync_and_raw_returns_output_value() -> None:
+def test_execution_defaults_to_sync_raw_and_document_uses_output_ids() -> None:
     response = client.post("/ogcapi/processes/echo/execution", json={"inputs": {"value": "hello"}})
+    document = client.post(
+        "/ogcapi/processes/echo/execution",
+        json={"inputs": {"value": "hello"}, "response": "document"},
+    )
     raw = client.post(
         "/ogcapi/processes/echo/execution",
         json={
             "inputs": {
                 "value": "hello",
             },
+            "outputs": {"value": {"transmissionMode": "value"}},
             "response": "raw",
         },
     )
 
     assert response.status_code == 200
-    assert response.json() == {"outputs": {"value": "hello"}, "links": []}
+    assert response.headers["content-type"].startswith("multipart/related")
+    message = BytesParser(policy=policy.default).parsebytes(
+        f"Content-Type: {response.headers['content-type']}\r\n\r\n".encode() + response.content
+    )
+    parts = list(message.iter_parts())
+    assert [part["Content-ID"] for part in parts] == ["<value>", "<length>"]
+    assert parts[0].get_content_type() == "text/plain"
+    assert parts[0].get_content() == "hello"
+    assert parts[1].get_payload(decode=True) == b"5"
+    assert document.status_code == 200
+    assert document.json() == {"value": "hello", "length": 5}
     assert raw.status_code == 200
-    assert raw.json() == "hello"
+    assert raw.headers["content-type"].startswith("text/plain")
+    assert raw.text == "hello"
 
 
 def test_job_list_contains_ogc_10_fields_and_exception_shape() -> None:
@@ -119,12 +138,15 @@ def test_job_list_contains_ogc_10_fields_and_exception_shape() -> None:
 def test_sync_execution_returns_results() -> None:
     response = client.post(
         "/ogcapi/processes/roofer%3Avalidate_point_cloud%3Av1/execution",
-        json={"inputs": {"point_clouds": [{"kind": "url", "url": "https://data.example/survey.laz"}]}},
+        json={
+            "inputs": {"point_clouds": [{"kind": "url", "url": "https://data.example/survey.laz"}]},
+            "response": "document",
+        },
         headers={"Prefer": "respond-sync"},
     )
 
     assert response.status_code == 200
-    assert response.json()["outputs"]["validation_report"]["all_ready"] is True
+    assert response.json()["validation_report"]["value"]["all_ready"] is True
 
 
 def test_jobs_are_scoped_to_authenticated_subject() -> None:
@@ -168,7 +190,8 @@ def test_results_support_output_selection_and_per_output_retrieval() -> None:
     )
 
     assert selected.status_code == 200
-    assert list(selected.json()["outputs"]) == ["converted_model"]
+    assert list(selected.json()) == ["converted_model"]
+    assert f"/jobs/{job_id}/results/converted_model>" in selected.headers["link"]
     assert output.status_code == 200
-    assert output.json() == selected.json()["outputs"]["converted_model"]
+    assert output.json() == selected.json()["converted_model"]["value"]
     assert invalid.status_code == 400
