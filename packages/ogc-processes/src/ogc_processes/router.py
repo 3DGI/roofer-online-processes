@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException, Query, Request, status
+from fastapi import Body, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -291,7 +291,11 @@ def create_app(
             **PROBLEM_RESPONSES,
         },
     )
-    def execute(request: Request, process_id: str, payload: ExecuteRequest) -> Response | dict[str, Any]:
+    def execute(
+        request: Request,
+        process_id: str,
+        payload: Annotated[ExecuteRequest, Body(...)],
+    ) -> Response | dict[str, Any]:
         process = catalog.get_process(process_id)
         if process is None:
             raise HTTPException(status_code=404, detail="Process not found.")

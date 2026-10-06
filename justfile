@@ -17,7 +17,22 @@ api-docker-down:
     docker compose down
 
 ogc-lint:
-    npm exec --package=@geonovum/ogc-checker@1.3.1 -- ogc-checker validate --standard ogc-api-processes --version 2.0.0 --input "${OGC_API_URL:-http://localhost:8000/ogcapi/openapi.json}" --fail-on warn
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for attempt in 1 2 3; do
+        if output=$(npm exec --package=@geonovum/ogc-checker@1.3.1 -- ogc-checker validate --standard ogc-api-processes --version 2.0.0 --input "${OGC_API_URL:-http://localhost:8000/ogcapi/openapi.json}" --fail-on warn 2>&1); then
+            printf '%s\n' "$output"
+            exit 0
+        else
+            status=$?
+        fi
+        printf '%s\n' "$output"
+        if [[ "$output" != *"Timed out resolving \$refs"* ]] || [[ "$attempt" == 3 ]]; then
+            exit "$status"
+        fi
+        echo "OGC schema fetch timed out; retrying validation ($((attempt + 1))/3)." >&2
+        sleep 2
+    done
 
 # Start the pinned TEAM Engine container and wait until its REST endpoint responds.
 ogc-teamengine-up:
