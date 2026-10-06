@@ -290,6 +290,17 @@ def create_app(
             201: {"model": JobStatus},
             **PROBLEM_RESPONSES,
         },
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "http://schemas.opengis.net/ogcapi/processes/part1/1.0/openapi/schemas/execute.yaml"
+                        }
+                    }
+                }
+            }
+        },
     )
     def execute(
         request: Request,
