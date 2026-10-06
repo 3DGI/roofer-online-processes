@@ -24,3 +24,11 @@ jobs:
       - run: just format-check
       - run: just lint
       - run: just test
+      - name: Build versioned integration wheels
+        run: |
+          uv build --package ogc-processes
+          uv build --package roofer-processes-contracts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roofer-integration-wheels
+          path: dist/*.whl

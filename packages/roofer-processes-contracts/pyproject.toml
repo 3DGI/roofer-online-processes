@@ -1,0 +1,16 @@
+[build-system]
+requires = ["uv_build>=0.9.8,<0.10.0"]
+build-backend = "uv_build"
+
+[project]
+name = "roofer-processes-contracts"
+version = "0.1.0"
+description = "Production Roofer reconstruction process contracts"
+requires-python = ">=3.12"
+dependencies = ["ogc-processes>=0.2,<0.3", "shapely>=2.1,<3"]
+
+[tool.uv.sources]
+ogc-processes = { workspace = true }
+
+[tool.uv.build-backend]
+module-name = "roofer_processes_contracts"
