@@ -32,6 +32,10 @@ the API violates the selected standard.
 The reusable protocol package is in `packages/ogc-processes`. Roofer Online integration is defined
 by the host adapter contract in [docs/integration-contract.md](docs/integration-contract.md).
 
+Production v2 contracts live in `packages/roofer-processes-contracts`. The real
+Roofer integration, remote ingestion, authentication, and release workflow are
+documented in [docs/roofer-integration.md](docs/roofer-integration.md).
+
 ## Staging deployment
 
 The reference API can be deployed on `webserver-fsn1` at

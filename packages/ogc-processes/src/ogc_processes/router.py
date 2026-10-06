@@ -104,6 +104,7 @@ def create_app(
     store: JobStore,
     authenticator: Authenticator,
     validator: ProcessContractValidator,
+    reject_subscribers: bool = False,
 ) -> FastAPI:
     """Create the OGC sub-application with host dependencies injected."""
     app = FastAPI(
@@ -179,7 +180,9 @@ def create_app(
     @app.exception_handler(StarletteHTTPException)
     async def http_problem(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         detail = exc.detail if isinstance(exc.detail, str) else "Request could not be completed."
-        return problem_response(request, exc.status_code, detail)
+        response = problem_response(request, exc.status_code, detail)
+        response.headers.update(exc.headers or {})
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def validation_problem(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -335,6 +338,8 @@ def create_app(
         process = catalog.get_process(process_id)
         if process is None:
             raise HTTPException(status_code=404, detail="Process not found.")
+        if reject_subscribers and payload.subscriber is not None:
+            raise HTTPException(status_code=400, detail="Subscribers are not supported.")
         mode = execution_mode(request.headers.get("prefer"))
         if mode not in process.jobControlOptions:
             raise HTTPException(status_code=400, detail="Requested execution mode is unavailable.")

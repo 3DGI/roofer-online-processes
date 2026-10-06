@@ -1,5 +1,11 @@
 # Next implementation steps
 
+Implementation update: the production v2 reconstruction adapter, durable worker,
+remote ingestion, and contracts are implemented in the Roofer consumer. See
+[roofer-integration.md](roofer-integration.md) for architecture and verification
+limits. Independent conversion and public deployment acceptance remain deferred.
+The assessment below describes the starting milestone requirements.
+
 Assessment date: 2026-10-06. This replaces the 2026-09-16 assessment. The current
 contracts, result representations, fixture downloads, and compliance CI are
 implemented. The OGC linter and compliance suite are fully green, as confirmed
