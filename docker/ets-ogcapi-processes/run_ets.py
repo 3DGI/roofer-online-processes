@@ -39,18 +39,25 @@ def main() -> int:
         print(f"TEAM Engine returned an unreadable report: {exc}", file=sys.stderr)
         return 1
 
-    failed = [
+    outcomes = [
         value
         for element in root.iter()
         for key, value in element.attrib.items()
-        if key.endswith("}resource") and value.rstrip("/").endswith("#failed")
+        if key.endswith("}resource")
+        and any(value.rstrip("/").endswith(f"#{outcome}") for outcome in ("passed", "failed", "untested"))
     ]
-    if failed:
-        print(f"OGC API - Processes ETS reported {len(failed)} failed test result(s).")
+    failed = sum(value.rstrip("/").endswith("#failed") for value in outcomes)
+    skipped = sum(value.rstrip("/").endswith("#untested") for value in outcomes)
+    passed = sum(value.rstrip("/").endswith("#passed") for value in outcomes)
+    if failed or skipped:
+        print(
+            "OGC API - Processes ETS reported "
+            f"{passed} passed, {failed} failed, and {skipped} skipped or untested result(s)."
+        )
         print(f"Full EARL report: {REPORT}")
         return 1
 
-    print(f"OGC API - Processes ETS completed without failed outcomes. Report: {REPORT}")
+    print(f"OGC API - Processes ETS passed all {passed} tests without skips. Report: {REPORT}")
     return 0
 
 
