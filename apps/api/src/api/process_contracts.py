@@ -307,7 +307,10 @@ class RooferContractValidator:
                 if isinstance(item, dict) and set(item) == {"value"}:
                     item = item["value"]
                 if key == "values" and isinstance(item, list):
-                    item = [entry["value"] if isinstance(entry, dict) and set(entry) == {"value"} else entry for entry in item]
+                    item = [
+                        entry["value"] if isinstance(entry, dict) and set(entry) == {"value"} else entry
+                        for entry in item
+                    ]
                 if key in normalized_inputs:
                     normalized_inputs[key] = item
             mixed = normalized_inputs.get("mixed")

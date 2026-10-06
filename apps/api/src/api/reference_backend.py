@@ -345,9 +345,7 @@ class ReferenceBackend:
                 self._pending_results.add(upstream_id)
             return ReferenceSubmission(
                 upstream_id,
-                StatusCode.successful
-                if mode == JobControlOption.execute_sync
-                else StatusCode.accepted,
+                StatusCode.successful if mode == JobControlOption.execute_sync else StatusCode.accepted,
                 "Reference execution completed"
                 if mode == JobControlOption.execute_sync
                 else "Reference execution accepted",
@@ -476,11 +474,7 @@ class ReferenceBackend:
         self, upstream_id: str, subject: str
     ) -> tuple[StatusCode, str | None, int | None, datetime | None, datetime | None]:
         record = self._results.get(upstream_id)
-        if (
-            upstream_id in self._pending_results
-            and record is not None
-            and record[0] == subject
-        ):
+        if upstream_id in self._pending_results and record is not None and record[0] == subject:
             return StatusCode.running, "Reference execution is paused", 0, None, datetime.now(UTC)
         return (
             StatusCode.successful,
