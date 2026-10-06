@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlsplit
 
@@ -292,9 +293,39 @@ class RooferContractValidator:
     def validate_inputs(self, process_id: str, inputs: dict[str, Any]) -> dict[str, Any]:
         if process_id == "echo":
             value = inputs.get("value")
+            if isinstance(value, dict) and set(value) == {"value"}:
+                value = value["value"]
+            if not isinstance(value, str) and any(
+                key in inputs for key in {"values", "bbox", "pause", "mixed", "formatted"}
+            ):
+                value = ""
             if not isinstance(value, str):
                 raise ContractViolation("The echo process requires a string value.")
-            return {"value": value}
+            normalized_inputs = dict(inputs)
+            for key in ("values", "bbox", "mixed", "formatted"):
+                item = normalized_inputs.get(key)
+                if isinstance(item, dict) and set(item) == {"value"}:
+                    item = item["value"]
+                if key == "values" and isinstance(item, list):
+                    item = [entry["value"] if isinstance(entry, dict) and set(entry) == {"value"} else entry for entry in item]
+                if key in normalized_inputs:
+                    normalized_inputs[key] = item
+            mixed = normalized_inputs.get("mixed")
+            if isinstance(mixed, dict) and "type" in mixed:
+                raise ContractViolation("The mixed input value has an unsupported media type.")
+            formatted = normalized_inputs.get("formatted")
+            if formatted is not None:
+                if not isinstance(formatted, str):
+                    raise ContractViolation("The formatted input must be a date-time string.")
+                try:
+                    datetime.fromisoformat(formatted.replace("Z", "+00:00"))
+                except ValueError as exc:
+                    raise ContractViolation("The formatted input must be a date-time string.") from exc
+            return {
+                key: item
+                for key, item in normalized_inputs.items()
+                if key in {"value", "values", "bbox", "mixed", "formatted", "pause"}
+            } | {"value": value}
         try:
             normalized = (
                 CONTRACTS[process_id]
@@ -319,10 +350,12 @@ class RooferContractValidator:
     def validate_results(self, process_id: str, results: Results) -> Results:
         if process_id == "echo":
             if (
-                set(results.outputs) != {"value", "length"}
+                set(results.outputs) != {"value", "length", "values", "bbox"}
                 or not isinstance(results.outputs["value"], str)
                 or type(results.outputs["length"]) is not int
                 or results.outputs["length"] != len(results.outputs["value"])
+                or not isinstance(results.outputs["values"], list)
+                or not isinstance(results.outputs["bbox"], dict)
             ):
                 raise ContractViolation("Invalid echo results.")
             return results

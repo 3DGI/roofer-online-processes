@@ -85,7 +85,70 @@ class ReferenceCatalog:
                         schema={"type": "string"},
                         minOccurs=1,
                         maxOccurs=1,
-                    )
+                    ),
+                    "values": InputDescription(
+                        title="values",
+                        description="Optional array used by the conformance fixture.",
+                        schema={"type": "array", "items": {"type": "string"}, "minItems": 1},
+                        minOccurs=0,
+                        maxOccurs=1,
+                    ),
+                    "bbox": InputDescription(
+                        title="bbox",
+                        description="Optional bounding box used by the conformance fixture.",
+                        schema={
+                            "type": "object",
+                            "format": "ogc-bbox",
+                            "required": ["bbox"],
+                            "properties": {
+                                "bbox": {
+                                    "type": "array",
+                                    "oneOf": [
+                                        {"minItems": 4, "maxItems": 4},
+                                        {"minItems": 6, "maxItems": 6},
+                                    ],
+                                    "items": {"type": "number"},
+                                },
+                                "crs": {
+                                    "type": "string",
+                                    "format": "uri",
+                                    "default": "http://www.opengis.net/def/crs/OGC/1.3/CRS84",
+                                    "enum": [
+                                        "http://www.opengis.net/def/crs/OGC/1.3/CRS84",
+                                        "http://www.opengis.net/def/crs/OGC/0/CRS84h",
+                                    ],
+                                },
+                            },
+                        },
+                        minOccurs=0,
+                        maxOccurs=1,
+                    ),
+                    "mixed": InputDescription(
+                        title="mixed",
+                        description="Optional mixed content used by the conformance fixture.",
+                        schema={
+                            "oneOf": [
+                                {"type": "string", "contentMediaType": "text/plain"},
+                                {"type": "object", "additionalProperties": True},
+                            ]
+                        },
+                        minOccurs=0,
+                        maxOccurs=1,
+                    ),
+                    "formatted": InputDescription(
+                        title="formatted",
+                        description="Optional formatted value used by the conformance fixture.",
+                        schema={"type": "string", "format": "date-time"},
+                        minOccurs=0,
+                        maxOccurs=1,
+                    ),
+                    "pause": InputDescription(
+                        title="pause",
+                        description="Keep an asynchronous conformance job running for result-not-ready checks.",
+                        schema={"type": "integer", "minimum": 1},
+                        minOccurs=0,
+                        maxOccurs=1,
+                    ),
                 },
                 outputs={
                     "value": OutputDescription(
@@ -95,7 +158,41 @@ class ReferenceCatalog:
                     "length": OutputDescription(
                         title="length",
                         description="Number of characters in the echoed value.",
-                        schema={"type": "integer", "minimum": 0},
+                        schema={
+                            "oneOf": [
+                                {"type": "integer", "minimum": 0},
+                                {"type": "string"},
+                            ]
+                        },
+                    ),
+                    "values": OutputDescription(
+                        title="values",
+                        description="Array output used by the conformance fixture.",
+                        schema={"type": "array", "items": {"type": "string"}},
+                    ),
+                    "bbox": OutputDescription(
+                        title="bbox",
+                        description="Bounding box output used by the conformance fixture.",
+                        schema={
+                            "allOf": [
+                                {
+                                    "type": "object",
+                                    "format": "ogc-bbox",
+                                    "required": ["bbox"],
+                                    "properties": {
+                                        "bbox": {
+                                            "type": "array",
+                                            "oneOf": [
+                                                {"minItems": 4, "maxItems": 4},
+                                                {"minItems": 6, "maxItems": 6},
+                                            ],
+                                            "items": {"type": "number"},
+                                        },
+                                        "crs": {"type": "string", "format": "uri"},
+                                    },
+                                }
+                            ]
+                        },
                     ),
                 },
                 jobControlOptions=[JobControlOption.execute_async, JobControlOption.execute_sync],
@@ -184,6 +281,7 @@ class ReferenceBackend:
         self._counter = 0
         self.feature_limit = feature_limit
         self._results: dict[str, tuple[str, Results]] = {}
+        self._pending_results: set[str] = set()
         self.point_clouds: dict[tuple[str, int], bool] = {}
         self.bags: dict[tuple[str, int], list[str]] = {}
         self.models: dict[tuple[str, int], list[str]] = {}
@@ -221,15 +319,35 @@ class ReferenceBackend:
         mode: JobControlOption,
     ) -> ReferenceSubmission:
         if process_id == "echo":
+            array_value = inputs.get("values", [inputs["value"]])
+            if not isinstance(array_value, list):
+                array_value = [array_value]
+            bbox_value = inputs.get("bbox")
+            if not isinstance(bbox_value, dict) or not isinstance(bbox_value.get("bbox"), list):
+                bbox_value = {
+                    "bbox": [0, 0, 1, 1],
+                    "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84",
+                }
             self._counter += 1
             upstream_id = f"reference-{self._counter}"
             self._results[upstream_id] = (
                 subject,
-                Results(outputs={"value": inputs["value"], "length": len(inputs["value"])}),
+                Results(
+                    outputs={
+                        "value": inputs["value"],
+                        "length": len(inputs["value"]),
+                        "values": array_value,
+                        "bbox": bbox_value,
+                    }
+                ),
             )
+            if mode == JobControlOption.execute_async and "pause" in inputs:
+                self._pending_results.add(upstream_id)
             return ReferenceSubmission(
                 upstream_id,
-                StatusCode.successful if mode == JobControlOption.execute_sync else StatusCode.accepted,
+                StatusCode.successful
+                if mode == JobControlOption.execute_sync
+                else StatusCode.accepted,
                 "Reference execution completed"
                 if mode == JobControlOption.execute_sync
                 else "Reference execution accepted",
@@ -357,6 +475,13 @@ class ReferenceBackend:
     def status(
         self, upstream_id: str, subject: str
     ) -> tuple[StatusCode, str | None, int | None, datetime | None, datetime | None]:
+        record = self._results.get(upstream_id)
+        if (
+            upstream_id in self._pending_results
+            and record is not None
+            and record[0] == subject
+        ):
+            return StatusCode.running, "Reference execution is paused", 0, None, datetime.now(UTC)
         return (
             StatusCode.successful,
             "Reference execution completed",
@@ -367,6 +492,8 @@ class ReferenceBackend:
 
     def results(self, upstream_id: str, subject: str) -> Results | None:
         record = self._results.get(upstream_id)
+        if upstream_id in self._pending_results:
+            return None
         return record[1] if record is not None and record[0] == subject else None
 
     def output(self, upstream_id: str, output_id: str, subject: str) -> Any | None:
