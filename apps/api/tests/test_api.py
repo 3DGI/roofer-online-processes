@@ -113,7 +113,12 @@ def test_execution_defaults_to_sync_raw_and_document_uses_output_ids() -> None:
         "value": "hello",
         "length": 5,
         "values": ["hello"],
-        "bbox": {"bbox": [0, 0, 1, 1], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"},
+        "bbox": {
+            "value": {
+                "bbox": [0, 0, 1, 1],
+                "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84",
+            }
+        },
     }
     assert raw.status_code == 200
     assert raw.headers["content-type"].startswith("text/plain")

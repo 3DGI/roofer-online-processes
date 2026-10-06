@@ -1,4 +1,4 @@
-name: ogc-compliance
+name: OGC Compliance
 
 on:
   push:
