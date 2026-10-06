@@ -104,12 +104,17 @@ def test_execution_defaults_to_sync_raw_and_document_uses_output_ids() -> None:
         f"Content-Type: {response.headers['content-type']}\r\n\r\n".encode() + response.content
     )
     parts = list(message.iter_parts())
-    assert [part["Content-ID"] for part in parts] == ["<value>", "<length>"]
+    assert [part["Content-ID"] for part in parts] == ["<value>", "<length>", "<values>", "<bbox>"]
     assert parts[0].get_content_type() == "text/plain"
     assert parts[0].get_content() == "hello"
     assert parts[1].get_payload(decode=True) == b"5"
     assert document.status_code == 200
-    assert document.json() == {"value": "hello", "length": 5}
+    assert document.json() == {
+        "value": "hello",
+        "length": 5,
+        "values": ["hello"],
+        "bbox": {"bbox": [0, 0, 1, 1], "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"},
+    }
     assert raw.status_code == 200
     assert raw.headers["content-type"].startswith("text/plain")
     assert raw.text == "hello"
