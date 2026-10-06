@@ -295,7 +295,7 @@ def create_app(
                 "content": {
                     "application/json": {
                         "schema": {
-                            "$ref": "http://schemas.opengis.net/ogcapi/processes/part1/1.0/openapi/schemas/execute.yaml"
+                            "$ref": "https://raw.githubusercontent.com/opengeospatial/ogcapi-processes/master/openapi/schemas/processes-core/execute.yaml"
                         }
                     }
                 }
