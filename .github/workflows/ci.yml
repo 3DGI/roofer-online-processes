@@ -13,21 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          version: latest
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.12"
-      - run: uv sync --dev
-      - run: uv run ruff format --check .
-      - run: uv run ruff check .
-      - run: uv run pytest
-
-  ogc-processes-ets:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
       - uses: extractions/setup-just@v4
       - uses: astral-sh/setup-uv@v10.2.0
         with:
@@ -35,34 +20,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: uv sync --locked --no-dev
-      - name: Start API
-        run: |
-          uv run --package roofer-online-processes-api uvicorn api.main:app --host 0.0.0.0 > /tmp/ogc-api.log 2>&1 &
-          echo $! > /tmp/ogc-api.pid
-      - name: Start OGC TEAM Engine ETS
-        run: just ogc-teamengine-up
-      - name: Wait for API
-        run: |
-          for attempt in $(seq 1 60); do
-            if curl --fail --silent http://localhost:8000/health >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          cat /tmp/ogc-api.log
-          exit 1
-      - name: Run OGC API - Processes ETS
-        run: just ogc-processes-ets
-      - name: Save ETS report
-        if: always()
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: ogc-processes-ets-report
-          path: artifacts/ogc-processes-ets.xml
-          if-no-files-found: ignore
-      - name: Stop containers and API
-        if: always()
-        run: |
-          just ogc-teamengine-down || true
-          if [ -f /tmp/ogc-api.pid ]; then kill "$(cat /tmp/ogc-api.pid)" || true; fi
+      - run: just sync
+      - run: just format-check
+      - run: just lint
+      - run: just test

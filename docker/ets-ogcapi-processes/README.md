@@ -18,13 +18,13 @@ API:
 
 ```sh
 just ogc-teamengine-up
-just ogc-processes-ets
+just ogc-compliance
 just ogc-teamengine-down
 ```
 
 The default IUT URL is `http://host.docker.internal:8000/ogcapi/`, which lets
 the Team Engine container reach the host API. Pass another URL to test a
-different reachable API, for example `just ogc-processes-ets
+different reachable API, for example `just ogc-compliance
 http://host.docker.internal:18082/ogcapi/`. CI uses the same `just` recipes.
 The runner writes an EARL XML report to `artifacts/ogc-processes-ets.xml`.
 Override `TEAM_ENGINE_URL` when using a different Team Engine instance. Do not
@@ -35,5 +35,5 @@ it previously could not execute it through the Roofer-only contract adapter;
 the echo input and output are now passed through as strings for ETS execution.
 
 This is a compliance check for the published Processes 1.0 Part 1 suite. The
-existing `just ogc-check` command remains complementary: it checks the generated
+existing `just ogc-lint` command remains complementary: it checks the generated
 OpenAPI document against the 2.0.0 draft using `@geonovum/ogc-checker`.

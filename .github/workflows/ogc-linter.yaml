@@ -1,0 +1,44 @@
+name: ogc-linter
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ogc-linter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: extractions/setup-just@v4
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          version: latest
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20.17"
+      - run: just sync
+      - name: Start API
+        run: |
+          just api-run > /tmp/ogc-api.log 2>&1 &
+          echo $! > /tmp/ogc-api.pid
+      - name: Wait for API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/ogc-api.log
+          exit 1
+      - run: just ogc-lint
+      - name: Stop API
+        if: always()
+        run: if [ -f /tmp/ogc-api.pid ]; then kill "$(cat /tmp/ogc-api.pid)" || true; fi

@@ -16,7 +16,7 @@ api-docker:
 api-docker-down:
     docker compose down
 
-ogc-check:
+ogc-lint:
     npm exec --package=@geonovum/ogc-checker@1.3.1 -- ogc-checker validate --standard ogc-api-processes --version 2.0.0 --input "${OGC_API_URL:-http://localhost:8000/ogcapi/openapi.json}" --fail-on warn
 
 # Start the pinned TEAM Engine container and wait until its REST endpoint responds.
@@ -38,7 +38,7 @@ ogc-teamengine-down:
     docker rm --force {{ogc-teamengine-container}} 2>/dev/null || true
 
 # Run the Processes 1.0 ETS headlessly through TEAM Engine's REST API.
-ogc-processes-ets iut_url="http://host.docker.internal:8000/ogcapi/":
+ogc-compliance iut_url="http://host.docker.internal:8000/ogcapi/":
     OGC_IUT_URL="{{iut_url}}" python3 docker/ets-ogcapi-processes/run_ets.py
 
 test:
