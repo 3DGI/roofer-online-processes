@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: extractions/setup-just@v4
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           version: latest
@@ -40,22 +41,19 @@ jobs:
           uv run --package roofer-online-processes-api uvicorn api.main:app --host 0.0.0.0 > /tmp/ogc-api.log 2>&1 &
           echo $! > /tmp/ogc-api.pid
       - name: Start OGC TEAM Engine ETS
-        run: docker run --add-host=host.docker.internal:host-gateway --publish 8080:8080 --detach --name ogc-processes-ets ogccite/ets-ogcapi-processes10
-      - name: Wait for services
+        run: just ogc-teamengine-up
+      - name: Wait for API
         run: |
           for attempt in $(seq 1 60); do
-            if curl --fail --silent http://localhost:8000/health >/dev/null && curl --fail --silent http://localhost:8080/teamengine/ >/dev/null; then
+            if curl --fail --silent http://localhost:8000/health >/dev/null; then
               exit 0
             fi
             sleep 2
           done
           cat /tmp/ogc-api.log
-          docker logs ogc-processes-ets
           exit 1
       - name: Run OGC API - Processes ETS
-        env:
-          OGC_IUT_URL: http://host.docker.internal:8000/ogcapi/
-        run: python docker/ets-ogcapi-processes/run_ets.py
+        run: just ogc-processes-ets
       - name: Save ETS report
         if: always()
         uses: actions/upload-artifact@v7.0.1
@@ -66,5 +64,5 @@ jobs:
       - name: Stop containers and API
         if: always()
         run: |
-          docker rm --force ogc-processes-ets || true
+          just ogc-teamengine-down || true
           if [ -f /tmp/ogc-api.pid ]; then kill "$(cat /tmp/ogc-api.pid)" || true; fi

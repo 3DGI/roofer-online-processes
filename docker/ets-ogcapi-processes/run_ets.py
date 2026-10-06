@@ -12,13 +12,12 @@ from pathlib import Path
 TEAM_ENGINE_URL = os.environ.get("TEAM_ENGINE_URL", "http://localhost:8080/teamengine")
 IUT_URL = os.environ.get("OGC_IUT_URL", "http://localhost:8000/ogcapi/")
 ETS_CODE = "ogcapi-processes-1.0"
-ETS_VERSION = "1.0"
 REPORT = Path("artifacts/ogc-processes-ets.xml")
 
 
 def main() -> int:
     REPORT.parent.mkdir(parents=True, exist_ok=True)
-    endpoint = f"{TEAM_ENGINE_URL}/rest/suites/{ETS_CODE}/{ETS_VERSION}/run?" + urllib.parse.urlencode(
+    endpoint = f"{TEAM_ENGINE_URL}/rest/suites/{ETS_CODE}/run?" + urllib.parse.urlencode(
         {"iut": IUT_URL, "echoprocessid": "echo"}
     )
     password_mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
