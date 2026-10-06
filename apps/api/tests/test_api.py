@@ -111,7 +111,9 @@ def test_job_list_contains_ogc_10_fields_and_exception_shape() -> None:
     assert entry["jobID"] == entry["id"]
     assert entry["type"] == "process"
     assert missing.status_code == 404
-    assert missing.json() == {"code": "NotFound", "description": "Job not found."}
+    assert missing.json()["type"] == ("http://www.opengis.net/def/exceptions/ogcapi-processes-1/1.0/no-such-job")
+    assert missing.json()["status"] == 404
+    assert missing.json()["detail"] == "Job not found."
 
 
 def test_sync_execution_returns_results() -> None:

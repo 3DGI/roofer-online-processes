@@ -359,11 +359,21 @@ def create_app(
             ],
         )
 
-    @app.get("/jobs/{job_id}", response_model=JobStatus, responses=PROBLEM_RESPONSES)
+    @app.get(
+        "/jobs/{job_id}",
+        response_model=JobStatus,
+        response_model_exclude_none=True,
+        responses=PROBLEM_RESPONSES,
+    )
     def get_job(request: Request, job_id: str) -> JobStatus:
         return refreshed_job(request, job_id, subject(request))
 
-    @app.get("/jobs/{job_id}/results", response_model=Results, responses=PROBLEM_RESPONSES)
+    @app.get(
+        "/jobs/{job_id}/results",
+        response_model=Results,
+        response_model_exclude_none=True,
+        responses=PROBLEM_RESPONSES,
+    )
     def get_results(
         request: Request,
         job_id: str,
@@ -413,8 +423,24 @@ def create_app(
 
 def problem_response(request: Request, status_code: int, detail: str) -> JSONResponse:
     """Return an OGC API 1.0 exception response."""
-    del request
+    base_type = "http://www.opengis.net/def/exceptions/ogcapi-processes-1/1.0"
+    if detail == "Results are not available.":
+        exception_type = f"{base_type}/result-not-ready"
+    elif status_code == 404 and "/processes/" in request.url.path:
+        exception_type = f"{base_type}/no-such-process"
+    elif status_code == 404 and "/jobs/" in request.url.path:
+        exception_type = f"{base_type}/no-such-job"
+    else:
+        exception_type = "about:blank"
     report = ExceptionReport(
+        type=exception_type,
+        title={
+            400: "Bad Request",
+            404: "Not Found",
+            500: "Internal Server Error",
+        }.get(status_code, "Error"),
+        status=status_code,
+        detail=detail,
         code={400: "BadRequest", 404: "NotFound", 500: "InternalServerError"}.get(status_code, "Error"),
         description=detail,
     )
