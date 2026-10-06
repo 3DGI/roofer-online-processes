@@ -1,4 +1,4 @@
-name: ogc-linter
+name: OGC Linter
 
 on:
   push:
