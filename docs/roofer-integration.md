@@ -49,10 +49,13 @@ bearer tokens are never forwarded. Presigned URLs are encrypted at rest with a
 shared Fernet key and removed after preparation or terminal failure; query strings
 are not included in job documents, asset names, diagnostics, or Dagster config.
 
-LAS/LAZ headers must contain valid bounds, points, and a supported RD CRS:
-EPSG:28992, or compound RD + NAP (vertical EPSG:5709). For 2D RD, heights are
-assumed to be NAP and that assumption is stored in asset metadata. No reprojection
-is performed. Header inspection precedes real pipeline metadata extraction.
+Host ingestion checks that LAS/LAZ headers are readable and contain a positive
+point count, finite ordered bounds, and nonzero horizontal extent. It does not
+require or parse point-cloud CRS metadata and passes source coordinates through
+unchanged. No reprojection is performed; clients should supply point clouds whose
+horizontal coordinates align with the EPSG:28992 BAG footprints used for
+selection and reconstruction. Header inspection precedes real pipeline metadata
+extraction.
 
 Defaults: 32 sources; total bytes use Roofer `MAX_SIZE` (10 GiB unless changed);
 5 redirects; 10-second connect, 60-second idle, and 3600-second source deadline;

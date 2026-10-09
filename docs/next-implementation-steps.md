@@ -27,8 +27,10 @@ so accepted work cannot become untracked. Use actual host authentication and
 ownership checks rather than demo bearer identities.
 
 Resolve BAG selectors against authoritative data, enforce complete selection and
-limits, and check point-cloud readiness/CRS compatibility. Publish successful
-results only when expected outputs are available through authorized downloads.
+limits, and check point-cloud readiness. Area-selector WKT uses EPSG:28992;
+point-cloud CRS metadata is not inspected and its coordinates pass through
+unchanged. Publish successful results only when expected outputs are available
+through authorized downloads.
 Production reconstruction should advertise async execution; the current router
 requires clients to send `Prefer: respond-async` for async-only processes because
 its default is sync.

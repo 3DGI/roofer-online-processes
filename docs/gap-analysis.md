@@ -28,7 +28,7 @@ and callbacks are not advertised by the current service.
 | Execute and results | Sync/raw/document, async 201 with Location, job polling, output selection and individual output routes | Real background execution, durable status and results |
 | Job listing | Subject isolation, type/process/status/datetime/duration filters and bounded limit | Robust datetime validation, stable lifecycle timestamps, pagination |
 | Validation/preparation | URL-only nonempty unique source list; ordered typed report; fixture always reports ready | Secure remote ingestion, actual metadata/validation and partial outcomes |
-| Reconstruction | Ready fixture IDs; BAG asset/building/area selectors; buffered containment and selection limits; fixture model/artifact result | Authoritative BAG resolution, ownership/CRS checks and real reconstruction |
+| Reconstruction | Ready fixture IDs; BAG asset/building/area selectors; buffered containment and selection limits; fixture model/artifact result | Authoritative BAG resolution, ownership checks and real reconstruction; area WKT uses EPSG:28992 |
 | Conversion | Existing fixture/generated model; only `cityjson` and `gpkg`; retrievable fixture downloads | Independent conversion workflow and durable artifact records |
 | Authentication/storage | Demo bearer identities and in-memory subject-scoped jobs/results | Roofer authentication, persistent job/run/asset mapping and authorized downloads |
 | 3DCityDB | Contract and backend scaffolding retained; catalog deliberately skips it; public description/execution return 404 | Deferred; reconsider only when explicitly restoring this scope |
@@ -66,10 +66,12 @@ feature-limit overflow are rejected. Results contain a model ID, BAG ID, sorted
 building IDs, fixture dataset date, and CityJSON/GeoPackage links.
 
 This demonstrates the contract rather than invoking Roofer or Dagster. The
-production adapter must resolve authoritative data, check all ownership/readiness
-and CRS requirements, submit the actual workflow, and require its expected
-materializations/artifacts before reporting success. Resolved identifiers and a
-dataset date do not promise an immutable geometry snapshot.
+production adapter must resolve authoritative data, check all ownership/readiness,
+submit the actual workflow, and require its expected materializations/artifacts
+before reporting success. Area-selector WKT uses EPSG:28992; the host does not
+inspect point-cloud CRS metadata, so clients must align point-cloud coordinates
+with the BAG data. Resolved identifiers and a dataset date do not promise an
+immutable geometry snapshot.
 
 ### `roofer:convert_format:v1`
 

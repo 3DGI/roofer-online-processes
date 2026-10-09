@@ -67,8 +67,10 @@ must enforce host access rules or use signed links.
 - Inspect real point clouds and preserve successful owned assets through partial
   batch failure. The report contract supports invalid/failed outcomes and
   `all_ready: false`; a completed report can still be a successful OGC job.
-- Resolve authoritative BAG selections and enforce ownership, readiness, compatible
-  CRS, complete identifier resolution and feature limits.
+- Resolve authoritative BAG selections and enforce ownership, readiness, EPSG:28992
+  area-selector WKT, complete identifier resolution and feature limits. Point-cloud
+  CRS metadata is not inspected; coordinate alignment with the BAG data is the
+  caller's responsibility.
 - Submit actual reconstruction and independent conversion workflows, retain durable
   mapping/results, and produce retrievable authorized artifacts.
 - Use real authentication, stable lifecycle mapping, restart recovery, and safe

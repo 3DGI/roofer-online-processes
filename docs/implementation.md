@@ -122,11 +122,12 @@ Demo bearer tokens are unverified subjects; missing/unusable authorization uses
 cloud/BAG/model IDs are available per subject. Public downloads check registrations
 across subjects. Restart loses all jobs, results and generated registrations.
 
-Production must provide Roofer authentication, ownership/readiness/CRS checks,
-safe ingestion, authoritative BAG resolution, workflow execution, persistent
+Production must provide Roofer authentication, ownership/readiness checks, safe
+ingestion, authoritative BAG resolution, workflow execution, persistent
 job/run/asset/result mapping, stable lifecycle timestamps and authorized artifacts.
-The protocol/backend/store calls do not make workflow submission and mapping
-persistence atomic.
+Area-selector WKT must use EPSG:28992. Point-cloud CRS metadata is not inspected;
+clients are responsible for coordinate alignment. The protocol/backend/store calls
+do not make workflow submission and mapping persistence atomic.
 
 CI contains Python checks, Geonovum v2 linter and TEAM Engine v1 compliance workflows.
 The green standards checks establish the current advertised surface; they do not
