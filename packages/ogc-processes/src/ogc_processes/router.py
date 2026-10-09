@@ -585,7 +585,17 @@ def parse_datetime(value: str) -> datetime | None:
 
 def duration_matches(job: JobStatus, minimum: int | None, maximum: int | None) -> bool:
     """Match elapsed job duration bounds in seconds."""
-    if job.started is None or job.finished is None:
+    if job.started is None:
         return False
-    elapsed = (job.finished - job.started).total_seconds()
+
+    if job.status == StatusCode.running:
+        end_time = datetime.now(UTC)
+    elif job.status in {StatusCode.successful, StatusCode.failed}:
+        if job.finished is None:
+            return False
+        end_time = job.finished
+    else:
+        return False
+
+    elapsed = (end_time - job.started).total_seconds()
     return (minimum is None or elapsed >= minimum) and (maximum is None or elapsed <= maximum)

@@ -69,7 +69,7 @@ implemented. No cancellation/dismissal or Part 2 lifecycle routes are present.
 Filters are `type`, `processID`, `status`, `datetime`, `minDuration`, `maxDuration`,
 and `limit`. Type accepts `process` or `ogc-api-processes`; durations are nonnegative
 and an inverted duration range is rejected. Datetime matches job creation time;
-duration filters require started and finished timestamps. Collections truncate
+duration filters measure running jobs from `started` to request time and completed jobs from `started` to `finished`; accepted jobs or jobs missing required timestamps are omitted. Collections truncate
 without pagination links. Invalid, naive, and reversed datetime filters need
 hardening. Reference status polling recreates lifecycle timestamps and is not a
 model for persistent production status. The special paused `echo` fixture remains
