@@ -20,7 +20,7 @@ ogc-lint:
     #!/usr/bin/env bash
     set -euo pipefail
     for attempt in 1 2 3; do
-        if output=$(npm exec --package=@geonovum/ogc-checker@1.3.1 -- ogc-checker validate --standard ogc-api-processes --version 2.0.0 --input "${OGC_API_URL:-http://localhost:8000/ogcapi/openapi.json}" --fail-on warn 2>&1); then
+        if output=$(npm exec -- ogc-checker validate --standard ogc-api-processes --version 2.0.0 --input "${OGC_API_URL:-http://localhost:8000/ogcapi/openapi.json}" --fail-on warn 2>&1); then
             printf '%s\n' "$output"
             exit 0
         else

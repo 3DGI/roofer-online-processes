@@ -21,6 +21,9 @@ jobs:
         with:
           python-version: "3.12"
       - uses: actions/setup-node@v7
+        with:
+          node-version: "22.18"
+      - run: npm ci
       - run: just sync
       - name: Start API
         run: |
