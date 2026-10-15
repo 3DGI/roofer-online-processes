@@ -254,6 +254,12 @@ def create_app(
                     type="application/vnd.oai.openapi+json;version=3.0",
                 ),
                 Link(
+                    href=f"{root}/docs",
+                    rel="service-doc",
+                    type="text/html",
+                    title="API documentation",
+                ),
+                Link(
                     href=f"{root}/conformance",
                     rel=REL_CONFORMANCE,
                     type="application/json",
