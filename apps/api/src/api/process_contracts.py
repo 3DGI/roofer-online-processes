@@ -88,7 +88,11 @@ class BAGBuildings(ContractModel):
     kind: Literal["buildings"] = Field(description="Select BAG buildings by their identifiers.")
     building_ids: Annotated[
         list[Nonblank],
-        Field(min_length=1, description="One or more unique building identifiers available to this service.", json_schema_extra={"uniqueItems": True}),
+        Field(
+            min_length=1,
+            description="One or more unique building identifiers available to this service.",
+            json_schema_extra={"uniqueItems": True},
+        ),
     ]
     _unique = field_validator("building_ids")(unique)
 
@@ -96,7 +100,9 @@ class BAGBuildings(ContractModel):
 class BAGArea(ContractModel):
     kind: Literal["area"] = Field(description="Select BAG buildings spatially by an area polygon.")
     wkt: Nonblank = Field(description="Valid, nonempty two-dimensional WKT POLYGON or MULTIPOLYGON.")
-    crs: Literal["EPSG:28992"] = Field(description="Coordinate reference system for the WKT area; only RD New is supported.")
+    crs: Literal["EPSG:28992"] = Field(
+        description="Coordinate reference system for the WKT area; only RD New is supported."
+    )
 
     @field_validator("wkt")
     @classmethod
@@ -120,7 +126,10 @@ class ReconstructionInputs(ContractModel):
     point_cloud_ids: IDList = Field(description="IDs of ready point-cloud assets produced by point-cloud preparation.")
     bag: BAGSelector = Field(description="BAG building selection by asset, building identifiers, or polygon area.")
     name: Nonblank | None = Field(default=None, description="Optional display name for the resulting model.")
-    config: dict[str, Any] = Field(default_factory=dict, description="Optional Roofer reconstruction settings; omitted settings use service defaults.")
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Optional Roofer reconstruction settings; omitted settings use service defaults.",
+    )
     _unique = field_validator("point_cloud_ids")(unique)
 
     @field_validator("config")
@@ -131,7 +140,9 @@ class ReconstructionInputs(ContractModel):
 
 
 class ConversionInputs(ContractModel):
-    model_3d_id: PositiveID = Field(description="ID of a model owned by the caller or the documented reference fixture model (789).")
+    model_3d_id: PositiveID = Field(
+        description="ID of a model owned by the caller or the documented reference fixture model (789)."
+    )
     formats: Annotated[
         list[Format],
         Field(

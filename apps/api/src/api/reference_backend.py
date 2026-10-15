@@ -254,8 +254,12 @@ class ReferenceCatalog:
                                 "converted_model": "Converted model artifacts",
                             }.get(contract.output_name, contract.output_name),
                             description={
-                                "validation_report": "Per-source readiness, assigned asset IDs, and available point-cloud metadata.",
-                                "building_model": "Model and selected BAG building IDs, with links to exported artifacts.",
+                                "validation_report": (
+                                    "Per-source readiness, assigned asset IDs, and available point-cloud metadata."
+                                ),
+                                "building_model": (
+                                    "Model and selected BAG building IDs, with links to exported artifacts."
+                                ),
                                 "converted_model": "The model ID and links to the requested converted artifacts.",
                             }.get(contract.output_name),
                             schema={
