@@ -5,11 +5,11 @@ DTaaS Testbed 2026 Topic 1.
 
 ## Development
 
-Requirements: Python 3.12+, Node.js 20.17+, npm, [uv](https://docs.astral.sh/uv/), and `just`.
+Requirements: Python 3.12+, Node.js 22.18+, npm, [uv](https://docs.astral.sh/uv/), and `just`.
 
 ```bash
 just sync
-npm install
+npm ci
 just api-run
 just check
 ```
