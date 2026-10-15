@@ -142,7 +142,9 @@ def _process_output_schema(process: ProcessDescription) -> dict[str, Any]:
     """Constrain requested outputs and transmission modes to the process."""
     return {
         "type": "object",
-        "description": "Select one or more outputs declared by this process and choose an advertised transmission mode.",
+        "description": (
+            "Select one or more outputs declared by this process and choose an advertised transmission mode."
+        ),
         "properties": {
             name: {
                 "type": "object",
@@ -277,7 +279,9 @@ def create_app(
                                 "inputs": {
                                     "type": "object",
                                     "additionalProperties": {},
-                                    "description": "Values for the process-specific inputs defined in its process description.",
+                                    "description": (
+                                        "Values for the process-specific inputs defined in its process description."
+                                    ),
                                 },
                                 "outputs": {
                                     "type": "object",
@@ -287,7 +291,10 @@ def create_app(
                                             "transmissionMode": {
                                                 "type": "string",
                                                 "enum": ["value", "reference"],
-                                                "description": "Return the output value in the response or provide a reference to it.",
+                                                "description": (
+                                                    "Return the output value in the response or provide a "
+                                                    "reference to it."
+                                                ),
                                             },
                                             "format": {"type": "object"},
                                             "mediaType": {"type": "string"},
@@ -302,7 +309,10 @@ def create_app(
                                 },
                                 "subscriber": {
                                     "type": "object",
-                                    "description": "Optional callback details for notification-capable services. This service does not use subscriber callbacks.",
+                                    "description": (
+                                        "Optional callback details for notification-capable services. "
+                                        "This service does not use subscriber callbacks."
+                                    ),
                                 },
                             },
                         }
@@ -394,7 +404,9 @@ def create_app(
     @app.get(
         "/",
         summary="Service landing page",
-        description="Returns links to process discovery, conformance information, jobs, this OpenAPI document, and Swagger UI.",
+        description=(
+            "Returns links to process discovery, conformance information, jobs, this OpenAPI document, and Swagger UI."
+        ),
         response_model=LandingPage,
         response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
@@ -450,15 +462,19 @@ def create_app(
     @app.get(
         "/processes",
         summary="List available processes",
-        description="Returns the published process summaries. Follow a process link or request its ID to inspect its inputs, outputs, and execution options.",
+        description=(
+            "Returns the published process summaries. Follow a process link or request its ID to inspect its inputs, "
+            "outputs, and execution options."
+        ),
         response_model=ProcessList,
         response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
     )
     def list_processes(
         request: Request,
-        limit: Annotated[int, Query(ge=1, le=1000, description="Maximum number of process summaries to return (1–1000).")]
-        = 10,
+        limit: Annotated[
+            int, Query(ge=1, le=1000, description="Maximum number of process summaries to return (1–1000).")
+        ] = 10,
     ) -> ProcessList:
         root = root_url(request)
         return ProcessList(
@@ -469,14 +485,22 @@ def create_app(
     @app.get(
         "/processes/{process_id}",
         summary="Get a process description",
-        description="Returns the selected process contract, including input schemas, output schemas, supported execution modes, and output transmission options. Use this description to prepare an execution request.",
+        description=(
+            "Returns the selected process contract, including input schemas, output schemas, supported execution "
+            "modes, and output transmission options. Use this description to prepare an execution request."
+        ),
         response_model=ProcessDescription,
         response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
     )
     def get_process(
         request: Request,
-        process_id: Annotated[str, Path(description="Process identifier returned by GET /processes, for example `roofer:reconstruct_buildings:v1`.")],
+        process_id: Annotated[
+            str,
+            Path(
+                description="Process ID from GET /processes (for example, `roofer:reconstruct_buildings:v1`).",
+            ),
+        ],
     ) -> ProcessDescription:
         process = catalog.get_process(process_id)
         if process is None:
@@ -576,27 +600,45 @@ def create_app(
     @app.get(
         "/jobs",
         summary="List your jobs",
-        description="Lists jobs visible to the current caller and refreshes their status before returning them. Optional filters narrow the list by process, status, date/time, duration, or job type.",
+        description=(
+            "Lists jobs visible to the current caller and refreshes their status before returning them. Optional "
+            "filters narrow the list by process, status, date/time, duration, or job type."
+        ),
         response_model=JobList,
         response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
     )
     def list_jobs(
         request: Request,
-        type: Annotated[list[str] | None, Query(description="Filter by processing entity type (`process` or `ogc-api-processes`).")]
-        = None,
-        processID: Annotated[list[str] | None, Query(description="Include jobs for these process identifiers. Repeat the parameter to supply multiple IDs.")]
-        = None,
-        status: Annotated[list[StatusCode] | None, Query(description="Include jobs in these states: accepted, running, successful, or failed. Repeat to supply multiple states.")]
-        = None,
-        datetime_: Annotated[str | None, Query(alias="datetime", description="RFC 3339 date/time or interval used to filter job creation times.")]
-        = None,
-        minDuration: Annotated[int | None, Query(ge=0, description="Minimum completed or elapsed job duration in seconds.")]
-        = None,
-        maxDuration: Annotated[int | None, Query(ge=0, description="Maximum completed or elapsed job duration in seconds.")]
-        = None,
-        limit: Annotated[int, Query(ge=1, le=1000, description="Maximum number of jobs to return (1–1000).")]
-        = 10,
+        type: Annotated[
+            list[str] | None, Query(description="Filter by processing entity type (`process` or `ogc-api-processes`).")
+        ] = None,
+        processID: Annotated[
+            list[str] | None,
+            Query(
+                description="Include jobs for these process identifiers. Repeat the parameter to supply multiple IDs."
+            ),
+        ] = None,
+        status: Annotated[
+            list[StatusCode] | None,
+            Query(
+                description=(
+                    "Include jobs in these states: accepted, running, successful, or failed. "
+                    "Repeat to supply multiple states."
+                )
+            ),
+        ] = None,
+        datetime_: Annotated[
+            str | None,
+            Query(alias="datetime", description="RFC 3339 date/time or interval used to filter job creation times."),
+        ] = None,
+        minDuration: Annotated[
+            int | None, Query(ge=0, description="Minimum completed or elapsed job duration in seconds.")
+        ] = None,
+        maxDuration: Annotated[
+            int | None, Query(ge=0, description="Maximum completed or elapsed job duration in seconds.")
+        ] = None,
+        limit: Annotated[int, Query(ge=1, le=1000, description="Maximum number of jobs to return (1–1000).")] = 10,
     ) -> JobList:
         if type is not None and any(item not in {"process", "ogc-api-processes"} for item in type):
             raise HTTPException(status_code=400, detail="Unsupported processing entity type.")
@@ -619,7 +661,10 @@ def create_app(
     @app.get(
         "/jobs/{job_id}",
         summary="Get job status",
-        description="Returns the latest status for a job belonging to the current caller. Follow its results link after the job succeeds.",
+        description=(
+            "Returns the latest status for a job belonging to the current caller. Follow its results link after the "
+            "job succeeds."
+        ),
         response_model=JobStatus,
         response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
@@ -630,7 +675,10 @@ def create_app(
     @app.get(
         "/jobs/{job_id}/results",
         summary="Get job results",
-        description="Returns a result document for a successful job. Optionally select output IDs; each returned output has a link to its individual value.",
+        description=(
+            "Returns a result document for a successful job. Optionally select output IDs; each returned output has "
+            "a link to its individual value."
+        ),
         response_model=dict[str, Any],
         response_model_exclude_none=True,
         responses=PROBLEM_RESPONSES,
@@ -638,7 +686,14 @@ def create_app(
     def get_results(
         request: Request,
         job_id: str,
-        outputs: Annotated[list[str] | None, Query(style="form", explode=False, description="Comma-separated output IDs to include, for example `building_model`.")] = None,
+        outputs: Annotated[
+            list[str] | None,
+            Query(
+                style="form",
+                explode=False,
+                description="Comma-separated output IDs to include, for example `building_model`.",
+            ),
+        ] = None,
     ) -> JSONResponse:
         owner = subject(request)
         job = completed_job(request, job_id, owner)

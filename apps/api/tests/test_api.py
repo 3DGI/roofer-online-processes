@@ -75,6 +75,7 @@ def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links
         "type": "array",
         "items": {"type": "string"},
         "title": "Outputs",
+        "description": "Comma-separated output IDs to include, for example `building_model`.",
     }
     assert outputs_parameter["style"] == "form"
     assert outputs_parameter["explode"] is False
