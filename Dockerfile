@@ -11,6 +11,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY pyproject.toml uv.lock ./
 COPY apps/api/pyproject.toml apps/api/pyproject.toml
 COPY packages/ogc-processes/pyproject.toml packages/ogc-processes/pyproject.toml
+COPY packages/roofer-processes-contracts/pyproject.toml packages/roofer-processes-contracts/pyproject.toml
 COPY apps/api/src apps/api/src
 COPY packages/ogc-processes/src packages/ogc-processes/src
 COPY data /app/data
