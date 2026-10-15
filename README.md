@@ -16,6 +16,8 @@ just check
 
 The reference service runs at <http://localhost:8000>. Its OGC API is under `/ogcapi`.
 Swagger UI is available at <http://localhost:8000/ogcapi/docs>.
+The rationale and tradeoffs for process-specific Swagger schemas are described
+in [docs/swagger-process-specific-schemas.md](docs/swagger-process-specific-schemas.md).
 Set `ROOFER_PROCESSES_PUBLIC_BASE_URL` to the public HTTPS origin (and any path prefix)
 when deploying the reference API. Artifact links use this base URL; it defaults to
 `http://localhost:8000` for local development. When running behind Caddy or another
