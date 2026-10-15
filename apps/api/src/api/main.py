@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from ogc_processes.router import create_app
 
-from api.process_contracts import RooferContractValidator
+from api.process_contracts import CONTRACTS, RooferContractValidator
 from api.reference_backend import (
     ReferenceAuthenticator,
     ReferenceBackend,
@@ -27,6 +27,14 @@ ogc_app = create_app(
     backend=backend,
     store=store,
     authenticator=ReferenceAuthenticator(),
+    openapi_examples={
+        "echo": {"value": "hello from Roofer"},
+        **{
+            process_id: contract.example
+            for process_id, contract in CONTRACTS.items()
+            if process_id != "roofer:export_to_3dcitydb:v1"
+        },
+    },
 )
 app.mount("/ogcapi", ogc_app)
 

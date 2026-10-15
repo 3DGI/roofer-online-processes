@@ -2,8 +2,10 @@ from email import policy
 from email.parser import BytesParser
 
 from api.main import app
+from api.process_contracts import CONTRACTS
 from fastapi import Request
 from fastapi.testclient import TestClient
+from jsonschema import Draft202012Validator, RefResolver
 from ogc_processes.router import root_url
 
 client = TestClient(app)
@@ -76,6 +78,81 @@ def test_mounted_ogc_application_has_relative_openapi_paths_and_v2_landing_links
     }
     assert outputs_parameter["style"] == "form"
     assert outputs_parameter["explode"] is False
+
+
+def test_openapi_documents_one_process_specific_execution_operation_per_published_process() -> None:
+    published = [process["id"] for process in client.get("/ogcapi/processes").json()["processes"]]
+    document = client.get("/ogcapi/openapi.json").json()
+    execution_paths = {path: item["post"] for path, item in document["paths"].items() if path.endswith("/execution")}
+
+    assert set(execution_paths) == {f"/processes/{process_id}/execution" for process_id in published}
+    assert "/processes/{process_id}/execution" not in document["paths"]
+    assert len({operation["operationId"] for operation in execution_paths.values()}) == len(published)
+
+    components = document["components"]["schemas"]
+    for process_id in published:
+        process_key = process_id.replace(":", "_")
+        operation = execution_paths[f"/processes/{process_id}/execution"]
+        request_content = operation["requestBody"]["content"]["application/json"]
+        body_schema = request_content["schema"]
+        input_reference = body_schema["properties"]["inputs"]["$ref"]
+        input_schema_name = input_reference.removeprefix("#/components/schemas/")
+        input_schema = components[input_schema_name]
+        description = client.get(f"/ogcapi/processes/{process_id}").json()
+        assert input_schema_name == f"{process_key}_Inputs"
+        assert set(input_schema["properties"]) == set(description["inputs"])
+        assert "process" not in body_schema["properties"]
+        assert "format" not in body_schema["properties"]
+        assert "mediaType" not in body_schema["properties"]
+        assert set(body_schema["properties"]["outputs"]["properties"]) == set(description["outputs"])
+        assert body_schema["properties"]["response"]["enum"] == ["raw", "document"]
+        assert "subscriber" in body_schema["properties"]
+        for output_options in body_schema["properties"]["outputs"]["properties"].values():
+            assert output_options["properties"]["transmissionMode"]["enum"] == ["value"]
+
+        example = request_content["example"]["inputs"]
+        if process_id in CONTRACTS:
+            assert example == CONTRACTS[process_id].example
+        else:
+            assert process_id == "echo"
+            assert example == {"value": "hello from Roofer"}
+
+        required = set(input_schema.get("required", []))
+        assert required == {name for name, item in description["inputs"].items() if item["minOccurs"] > 0}
+        Draft202012Validator(
+            input_schema,
+            resolver=RefResolver.from_schema(document),
+        ).validate(example)
+
+    all_references = []
+
+    def collect_references(value: object) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/components/schemas/"):
+                all_references.append(reference.removeprefix("#/components/schemas/"))
+            for child in value.values():
+                collect_references(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect_references(child)
+
+    collect_references(document["paths"])
+    collect_references(components)
+    assert all(reference in components for reference in all_references)
+
+
+def test_parent_openapi_prefixes_process_operations_and_parent_swagger_uses_parent_document() -> None:
+    with TestClient(app) as docs_client:
+        docs = docs_client.get("/docs")
+        document = docs_client.get("/openapi.json").json()
+
+    assert "url: '/openapi.json'" in docs.text
+    for process_id in ("echo", *CONTRACTS.keys()):
+        if process_id == "roofer:export_to_3dcitydb:v1":
+            continue
+        assert f"/ogcapi/processes/{process_id}/execution" in document["paths"]
+    assert "/processes/echo/execution" not in document["paths"]
 
 
 def test_async_execution_returns_job_location() -> None:

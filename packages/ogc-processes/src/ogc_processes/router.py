@@ -1,8 +1,10 @@
 """Mountable OGC API - Processes Part 1 version 2 application."""
 
 import json
+import re
+from copy import deepcopy
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Mapping
 from uuid import uuid4
 
 from fastapi import Body, FastAPI, HTTPException, Query, Request, status
@@ -97,6 +99,128 @@ def _normalize_openapi_30(node: Any) -> None:
             _normalize_openapi_30(value)
 
 
+def _namespace_schema_references(schema: dict[str, Any], prefix: str) -> dict[str, Any]:
+    """Move JSON Schema definitions into this process's OpenAPI components."""
+    normalized = deepcopy(schema)
+    definitions = normalized.pop("$defs", {})
+
+    def rewrite(node: Any) -> None:
+        if isinstance(node, dict):
+            reference = node.get("$ref")
+            if isinstance(reference, str) and reference.startswith("#/$defs/"):
+                name = reference.removeprefix("#/$defs/")
+                node["$ref"] = f"#/components/schemas/{prefix}_{name}"
+            for value in node.values():
+                rewrite(value)
+        elif isinstance(node, list):
+            for value in node:
+                rewrite(value)
+
+    rewrite(normalized)
+    rewritten_definitions: dict[str, Any] = {}
+    for name, definition in definitions.items():
+        rewritten = deepcopy(definition)
+        rewrite(rewritten)
+        rewritten_definitions[f"{prefix}_{name}"] = rewritten
+    return {"schema": normalized, "definitions": rewritten_definitions}
+
+
+def _process_inputs_schema(process: ProcessDescription) -> dict[str, Any]:
+    """Build the input object schema advertised by a process description."""
+    if process.inputsSchema is not None:
+        return deepcopy(process.inputsSchema)
+
+    properties = {name: deepcopy(item.schema_) for name, item in process.inputs.items()}
+    required = [name for name, item in process.inputs.items() if item.minOccurs > 0]
+    schema: dict[str, Any] = {"type": "object", "properties": properties}
+    if required:
+        schema["required"] = required
+    return schema
+
+
+def _process_output_schema(process: ProcessDescription) -> dict[str, Any]:
+    """Constrain requested outputs and transmission modes to the process."""
+    return {
+        "type": "object",
+        "properties": {
+            name: {
+                "type": "object",
+                "properties": {
+                    "transmissionMode": {
+                        "type": "string",
+                        "enum": [mode.value for mode in process.outputTransmission],
+                        "default": process.outputTransmission[0].value,
+                    }
+                },
+            }
+            for name in process.outputs
+        },
+        "additionalProperties": False,
+        "minProperties": 1,
+    }
+
+
+def _openapi_execution_operations(
+    schema: dict[str, Any],
+    catalog: ProcessCatalog,
+    examples: Mapping[str, dict[str, Any]],
+) -> None:
+    """Replace the generic execution path in the document with catalog operations."""
+    paths = schema.setdefault("paths", {})
+    generic_path = paths.pop("/processes/{process_id}/execution", None)
+    if not isinstance(generic_path, dict) or not isinstance(generic_path.get("post"), dict):
+        return
+    generic_operation = generic_path["post"]
+    components = schema.setdefault("components", {}).setdefault("schemas", {})
+
+    for summary in catalog.list_processes():
+        process = catalog.get_process(summary.id)
+        if process is None:
+            continue
+
+        process_key = re.sub(r"[^A-Za-z0-9]+", "_", process.id).strip("_") or "process"
+        input_schema = _namespace_schema_references(_process_inputs_schema(process), process_key)
+        components.update(input_schema["definitions"])
+        components[f"{process_key}_Inputs"] = input_schema["schema"]
+
+        body_schema: dict[str, Any] = {
+            "type": "object",
+            "properties": {
+                "inputs": {"$ref": f"#/components/schemas/{process_key}_Inputs"},
+                "outputs": _process_output_schema(process),
+                "response": {
+                    "type": "string",
+                    "enum": ["raw", "document"],
+                    "default": "raw",
+                },
+                "subscriber": {"type": "object", "additionalProperties": True},
+            },
+        }
+        if not process.inputsSchema:
+            # Echo has no aggregate schema, so namespace refs from each named input.
+            for input_name, input_description in process.inputs.items():
+                namespaced_input = _namespace_schema_references(input_description.schema_, process_key)
+                components.update(namespaced_input["definitions"])
+                body_schema["properties"]["inputs"]["$ref"] = f"#/components/schemas/{process_key}_Inputs"
+                input_schema["schema"]["properties"][input_name] = namespaced_input["schema"]
+            components[f"{process_key}_Inputs"] = input_schema["schema"]
+
+        operation = deepcopy(generic_operation)
+        operation["operationId"] = f"execute_{process_key}"
+        operation["summary"] = f"Execute {process.title}"
+        operation["description"] = process.description
+        operation.pop("parameters", None)
+        request_content: dict[str, Any] = {"schema": body_schema}
+        example = examples.get(process.id)
+        if example is not None:
+            request_content["example"] = {"inputs": deepcopy(example)}
+        operation["requestBody"] = {
+            "required": True,
+            "content": {"application/json": request_content},
+        }
+        paths[f"/processes/{process.id}/execution"] = {"post": operation}
+
+
 def create_app(
     *,
     catalog: ProcessCatalog,
@@ -105,6 +229,7 @@ def create_app(
     authenticator: Authenticator,
     validator: ProcessContractValidator,
     reject_subscribers: bool = False,
+    openapi_examples: Mapping[str, dict[str, Any]] | None = None,
 ) -> FastAPI:
     """Create the OGC sub-application with host dependencies injected."""
     app = FastAPI(
@@ -173,6 +298,8 @@ def create_app(
                         if key in parameter_schema:
                             parameter[key] = parameter_schema.pop(key)
                     parameter_schema.pop("nullable", None)
+        _openapi_execution_operations(schema, catalog, openapi_examples or {})
+        _normalize_openapi_30(schema)
         return schema
 
     app.openapi = openapi_30  # type: ignore[method-assign]
