@@ -9,6 +9,20 @@ from ogc_processes.router import root_url
 client = TestClient(app)
 
 
+def test_mounted_swagger_docs_load_the_ogc_schema() -> None:
+    for prefix in ("", "/public"):
+        with TestClient(app, root_path=prefix) as docs_client:
+            response = docs_client.get(f"{prefix}/ogcapi/docs")
+            specification = docs_client.get(f"{prefix}/ogcapi/openapi.json")
+
+        assert response.status_code == 200
+        assert "swagger-ui" in response.text
+        assert f"url: '{prefix}/ogcapi/openapi.json'" in response.text
+        assert specification.status_code == 200
+        assert "/processes" in specification.json()["paths"]
+        assert {"url": f"{prefix}/ogcapi"} in specification.json()["servers"]
+
+
 def test_root_url_combines_external_and_mount_paths_once() -> None:
     request = Request(
         {

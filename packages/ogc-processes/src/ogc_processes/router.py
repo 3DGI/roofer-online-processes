@@ -110,7 +110,7 @@ def create_app(
     app = FastAPI(
         title="Roofer Online OGC API - Processes",
         version="2.0.0",
-        docs_url=None,
+        docs_url="/docs",
         redoc_url=None,
     )
     app.openapi_version = "3.0.3"
