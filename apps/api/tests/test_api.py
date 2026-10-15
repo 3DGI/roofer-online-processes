@@ -5,7 +5,7 @@ from api.main import app
 from api.process_contracts import CONTRACTS
 from fastapi import Request
 from fastapi.testclient import TestClient
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator
 from ogc_processes.router import root_url
 
 client = TestClient(app)
@@ -120,8 +120,10 @@ def test_openapi_documents_one_process_specific_execution_operation_per_publishe
         required = set(input_schema.get("required", []))
         assert required == {name for name, item in description["inputs"].items() if item["minOccurs"] > 0}
         Draft202012Validator(
-            input_schema,
-            resolver=RefResolver.from_schema(document),
+            {
+                "$ref": input_reference,
+                "components": {"schemas": components},
+            }
         ).validate(example)
 
     all_references = []
