@@ -106,7 +106,7 @@ def test_openapi_documents_one_process_specific_execution_operation_per_publishe
         assert "format" not in body_schema["properties"]
         assert "mediaType" not in body_schema["properties"]
         assert set(body_schema["properties"]["outputs"]["properties"]) == set(description["outputs"])
-        assert body_schema["properties"]["response"]["enum"] == ["raw", "document"]
+        assert body_schema["properties"]["response"]["enum"] == ["collection"]
         assert "subscriber" in body_schema["properties"]
         for output_options in body_schema["properties"]["outputs"]["properties"].values():
             assert output_options["properties"]["transmissionMode"]["enum"] == ["value"]
@@ -181,6 +181,10 @@ def test_execution_defaults_to_sync_raw_and_document_uses_output_ids() -> None:
         "/ogcapi/processes/echo/execution",
         json={"inputs": {"value": "hello"}, "response": "document"},
     )
+    collection = client.post(
+        "/ogcapi/processes/echo/execution",
+        json={"inputs": {"value": "hello"}, "response": "collection"},
+    )
     raw = client.post(
         "/ogcapi/processes/echo/execution",
         json={
@@ -214,6 +218,8 @@ def test_execution_defaults_to_sync_raw_and_document_uses_output_ids() -> None:
             }
         },
     }
+    assert collection.status_code == 200
+    assert collection.json() == document.json()
     assert raw.status_code == 200
     assert raw.headers["content-type"].startswith("text/plain")
     assert raw.text == "hello"

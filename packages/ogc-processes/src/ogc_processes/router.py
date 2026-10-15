@@ -197,9 +197,8 @@ def _openapi_execution_operations(
                 "outputs": _process_output_schema(process),
                 "response": {
                     "type": "string",
-                    "enum": ["raw", "document"],
-                    "default": "raw",
-                    "description": "Return raw output content or a JSON result document.",
+                    "enum": ["collection"],
+                    "description": "Return the selected outputs as a result collection.",
                 },
                 "subscriber": {
                     "type": "object",
@@ -526,7 +525,7 @@ def create_app(
             "process description is the source of truth for required fields and constraints. Use "
             "`Prefer: respond-async` to request a job when asynchronous execution is supported, then poll the "
             "returned job URL and retrieve results after success. Without that preference, execution uses the "
-            "process's synchronous mode when available. `response` selects raw output or a JSON result document."
+            "process's synchronous mode when available. Set `response` to `collection` to request a result collection."
         ),
         response_model=None,
         responses={
