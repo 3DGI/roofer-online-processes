@@ -49,8 +49,10 @@ and an accepted job. Fixture work is done during submission and ordinary jobs
 become successful on polling; there is no background worker.
 
 `response` defaults to `raw`. A single raw output is text or JSON; multiple raw
-outputs use `multipart/related` (exercised by `echo`). `response: document` returns
-output IDs at the document root, wrapping object values in `{"value": ...}`.
+outputs use `multipart/related` (exercised by `echo`). The OpenAPI contract for
+Processes 2.0 advertises `response: collection`; it returns output IDs at the
+document root, wrapping object values in `{"value": ...}`. The runtime also
+accepts `response: document` for existing clients.
 Job results use the same document representation and supply per-output HTTP
 `Link` headers. The internal `Results.outputs` wrapper is not the wire document.
 

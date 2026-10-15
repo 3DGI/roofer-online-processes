@@ -22,8 +22,9 @@ class TransmissionMode(str, Enum):
 
 
 class ResponseType(str, Enum):
-    """Requested response document format."""
+    """Requested result encoding."""
 
+    collection = "collection"
     document = "document"
     raw = "raw"
 
