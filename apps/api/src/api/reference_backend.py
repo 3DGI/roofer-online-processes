@@ -77,11 +77,15 @@ class ReferenceCatalog:
             ProcessDescription(
                 id="echo",
                 title="Echo",
-                description="Return the supplied value as a process output.",
+                description=(
+                    "Returns the supplied text and simple derived values. Optional inputs exercise OGC data "
+                    "shapes for conformance checks; they are not Roofer processing options."
+                ),
                 version="1.0.0",
                 inputs={
                     "value": InputDescription(
                         title="value",
+                        description="Text to return as the primary process output.",
                         schema={"type": "string"},
                         minOccurs=1,
                         maxOccurs=1,
@@ -210,9 +214,23 @@ class ReferenceCatalog:
                     id=process_id,
                     title=process_id.split(":")[1].replace("_", " ").title(),
                     description={
-                        "roofer:validate_point_cloud:v1": "Check that the selected point clouds are ready to use.",
-                        "roofer:reconstruct_buildings:v1": "Build 3D models from point clouds and building footprints.",
-                        "roofer:convert_format:v1": "Convert a model into the formats you need.",
+                        "roofer:validate_point_cloud:v1": (
+                            "Accepts one or more remote LAS/LAZ URLs and returns a readiness report for each source, "
+                            "including a point-cloud ID for sources that pass preparation. The report preserves "
+                            "source order. This reference implementation returns deterministic fixture results; "
+                            "it does not download or inspect the remote files."
+                        ),
+                        "roofer:reconstruct_buildings:v1": (
+                            "Creates a building model from ready point-cloud asset IDs and a BAG building or area "
+                            "selection. Optional configuration values customize reconstruction and export formats "
+                            "select the artifacts included in the result. This reference implementation uses "
+                            "fixture assets and footprints rather than running the production reconstruction pipeline."
+                        ),
+                        "roofer:convert_format:v1": (
+                            "Creates additional exports for an existing model. Provide its model ID and one or more "
+                            "supported formats (`cityjson` or `gpkg`); the result contains an artifact link for each "
+                            "requested format."
+                        ),
                     }.get(process_id, "A Roofer processing workflow."),
                     inputsSchema=schema,
                     version="1.0.0",
@@ -230,7 +248,16 @@ class ReferenceCatalog:
                     },
                     outputs={
                         contract.output_name: OutputDescription(
-                            title=contract.output_name,
+                            title={
+                                "validation_report": "Point-cloud validation report",
+                                "building_model": "Reconstructed building model",
+                                "converted_model": "Converted model artifacts",
+                            }.get(contract.output_name, contract.output_name),
+                            description={
+                                "validation_report": "Per-source readiness, assigned asset IDs, and available point-cloud metadata.",
+                                "building_model": "Model and selected BAG building IDs, with links to exported artifacts.",
+                                "converted_model": "The model ID and links to the requested converted artifacts.",
+                            }.get(contract.output_name),
                             schema={
                                 "type": "object",
                                 "properties": contract.output.model_json_schema().get("properties", {}),
