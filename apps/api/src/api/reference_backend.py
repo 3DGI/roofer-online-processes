@@ -239,7 +239,11 @@ class ReferenceCatalog:
                             title=name,
                             schema={
                                 **field,
-                                **{"$defs": referenced_definitions(field, definitions)},
+                                **(
+                                    {"$defs": selected_definitions}
+                                    if (selected_definitions := referenced_definitions(field, definitions))
+                                    else {}
+                                ),
                             },
                             minOccurs=1 if name in schema.get("required", []) else 0,
                             maxOccurs=1,

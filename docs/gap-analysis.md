@@ -24,7 +24,7 @@ and callbacks are not advertised by the current service.
 | Capability | Current evidence | Remaining work |
 | --- | --- | --- |
 | Protocol boundary | Injected interfaces in `packages/ogc-processes/src/ogc_processes/interfaces.py`; no Roofer or Dagster imports in the protocol package | Implement production host services behind those interfaces |
-| Discovery and schemas | `ReferenceCatalog` publishes `echo`, validation, reconstruction, conversion; named inputs and complete `inputsSchema` derive from Pydantic contracts | Keep descriptions and runtime behavior aligned when extending scope |
+| Discovery and schemas | `ReferenceCatalog` publishes `echo`, validation, reconstruction, conversion; named inputs and complete OpenAPI execution schemas derive from Pydantic contracts | Keep descriptions and runtime behavior aligned when extending scope |
 | Execute and results | Sync/raw/document, async 201 with Location, job polling, output selection and individual output routes | Real background execution, durable status and results |
 | Job listing | Subject isolation, type/process/status/datetime/duration filters and bounded limit | Robust datetime validation, stable lifecycle timestamps, pagination |
 | Validation/preparation | URL-only nonempty unique source list; ordered typed report; fixture always reports ready | Secure remote ingestion, actual metadata/validation and partial outcomes |

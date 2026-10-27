@@ -80,6 +80,6 @@ Prepare uploaded, remote, or existing point clouds with `roofer:validate_point_c
 inspect each outcome for ready IDs, then reconstruct with an explicit BAG selector. Convert
 or export owned ready models and retrieve authenticated artifacts. See the
 [client examples and production adapter requirements](docs/integration-contract.md).
-Contracts are enforced by runtime models and advertised JSON schemas, including the complete
-`inputsSchema` extension for constraints spanning multiple named inputs. The reference service
+Contracts are enforced by runtime models and advertised JSON schemas. The OpenAPI execution
+request schema includes constraints spanning multiple named inputs. The reference service
 uses deterministic fixtures and demo archives; production ingestion is the next milestone.

@@ -26,7 +26,7 @@ Paths below are relative to `/ogcapi`.
 | `GET /conformance` | Core, JSON, OGC process description and Job list classes for v2 and v1 |
 | `GET /openapi.json` | OpenAPI 3.0.3 with relative OGC paths |
 | `GET /processes` | Catalog, default limit 10; allowed limit 1–1000 |
-| `GET /processes/{process_id}` | Named schemas, full Roofer `inputsSchema`, outputs, modes and links |
+| `GET /processes/{process_id}` | Named schemas, outputs, modes and links |
 | `POST /processes/{process_id}/execution` | Validate request and submit; sync 200 or async 201 |
 | `GET /jobs` | Caller-scoped refreshed jobs with filters and limit |
 | `GET /jobs/{job_id}` | Caller-scoped refreshed status |
@@ -80,8 +80,8 @@ running with unavailable results and currently reports a finished timestamp.
 ## Roofer contracts
 
 `apps/api/src/api/process_contracts.py` defines input/output Pydantic models and
-`CONTRACTS`. Discovery derives named schemas and full `inputsSchema` from them;
-runtime validation uses the same models. `inputsSchema` is an extension describing
+`CONTRACTS`. Discovery derives named schemas from them and OpenAPI includes the full input schema;
+runtime validation uses the same models. The full input schema describes
 constraints across named inputs. Each named input has maxOccurs 1, with required
 fields marked minOccurs 1. `echo` has separate conformance fixture handling.
 

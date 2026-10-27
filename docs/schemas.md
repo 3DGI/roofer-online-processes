@@ -36,9 +36,9 @@ for this service. Current protocol models are in
 JSON Schema generation are in `apps/api/src/api/process_contracts.py`.
 
 Read `/ogcapi/openapi.json` for the advertised OpenAPI 3.0.3 surface and
-`/ogcapi/processes/{process_id}` for named input/output schemas and the complete
-Roofer `inputsSchema` extension. Named input schemas include only their referenced
-`$defs` dependencies; the full input schema captures constraints across inputs.
+`/ogcapi/processes/{process_id}` for named input/output schemas. Named input schemas include
+only their referenced `$defs` dependencies; the OpenAPI execution request schema captures
+constraints across inputs.
 Runtime validation also enforces rules such as geometric validity and output
 consistency that clients should not infer from schema validation alone.
 
