@@ -32,18 +32,17 @@ just ogc-lint
 Set `OGC_API_URL` to check another running instance. The checker returns a non-zero status when
 the API violates the selected standard.
 
-The reusable protocol package is in `packages/ogc-processes`. Roofer Online integration is defined
-by the host adapter contract in [docs/integration-contract.md](docs/integration-contract.md).
+The reusable protocol package is in `packages/ogc-processes`.
 
-Production v2 contracts live in `packages/roofer-processes-contracts`. The real
-Roofer integration, remote ingestion, authentication, and release workflow are
-documented in [docs/roofer-integration.md](docs/roofer-integration.md).
+Production v2 contracts live in `packages/roofer-processes-contracts`.
 
-## Scope and provenance
+## Running with Compose
 
-See [docs/project-plan.md](docs/project-plan.md) and [docs/architecture.md](docs/architecture.md)
-for the implementation plan and deployment boundary.
-The [public URL fixes plan](docs/public-url-fixes-plan.md) covers proxy and artifact links.
+Run `docker compose up -d --build api` and open <http://localhost:18082/ogcapi>.
+Set `ROOFER_PROCESSES_PUBLIC_BASE_URL` to the externally visible origin when running
+behind a proxy. The reference API uses demo authentication and stores jobs in memory.
+
+See [the architecture](docs/architecture.md) for the implementation scope.
 
 ## API workflow
 
@@ -51,6 +50,6 @@ Prepare uploaded, remote, or existing point clouds with `roofer:validate_point_c
 inspect each outcome for ready IDs, then reconstruct with an explicit BAG selector. Convert
 or export owned ready models and retrieve authenticated artifacts. See the
 [client examples and production adapter requirements](docs/integration-contract.md).
-Contracts are enforced by runtime models and advertised JSON schemas, including the complete
-`inputsSchema` extension for constraints spanning multiple named inputs. The reference service
+Contracts are enforced by runtime models and advertised JSON schemas. The OpenAPI execution
+request schema includes constraints spanning multiple named inputs. The reference service
 uses deterministic fixtures and demo archives; production ingestion is the next milestone.

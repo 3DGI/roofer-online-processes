@@ -98,7 +98,8 @@ class ProcessDescription(ProcessSummary):
     """Complete process description."""
 
     inputs: dict[str, InputDescription]
-    inputsSchema: dict[str, Any] | None = None
+    # Used to generate the execution request schema, not duplicated in discovery.
+    inputsSchema: dict[str, Any] | None = Field(default=None, exclude=True)
     outputs: dict[str, OutputDescription]
     jobControlOptions: list[JobControlOption]
     outputTransmission: list[TransmissionMode]

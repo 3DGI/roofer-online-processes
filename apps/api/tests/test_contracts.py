@@ -83,10 +83,10 @@ def test_examples_and_published_schemas(service, process_id):
     client, _, _ = service
     contract = CONTRACTS[process_id]
     description = client.get(f"/ogcapi/processes/{process_id}").json()
-    Draft202012Validator.check_schema(description["inputsSchema"])
-    Draft202012Validator(description["inputsSchema"]).validate(contract.example)
+    assert "inputsSchema" not in description
     contract.inputs.model_validate(contract.example)
     for name, value in contract.example.items():
+        Draft202012Validator.check_schema(description["inputs"][name]["schema"])
         Draft202012Validator(description["inputs"][name]["schema"]).validate(value)
     response = execute(client, process_id.split(":")[1], contract.example)
     assert response.status_code == 200, response.text
@@ -102,6 +102,7 @@ def test_reconstruction_input_schemas_only_include_referenced_definitions():
 
     for name in ["point_cloud_ids", "name", "config"]:
         assert not definitions.intersection(description.inputs[name].schema_.get("$defs", {}))
+        assert "$defs" not in description.inputs[name].schema_
 
     bag_schema = description.inputs["bag"].schema_
     assert definitions.issubset(bag_schema["$defs"])
