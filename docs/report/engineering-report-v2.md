@@ -195,13 +195,16 @@ Illustrative host integration, where `jwt_authenticator`, `execution_backend` an
 from ogc_processes.router import create_app
 from roofer_processes_contracts.catalog import RooferCatalog, RooferContractValidator
 
-app.mount("/ogcapi", create_app(
-    catalog=RooferCatalog(),
-    validator=RooferContractValidator(),
-    authenticator=jwt_authenticator,
-    backend=execution_backend,
-    store=job_store,
-))
+app.mount(
+    "/ogcapi",
+    create_app(
+        catalog=RooferCatalog(),
+        validator=RooferContractValidator(),
+        authenticator=jwt_authenticator,
+        backend=execution_backend,
+        store=job_store,
+    ),
+)
 ```
 
 ### Why not pygeoapi?
