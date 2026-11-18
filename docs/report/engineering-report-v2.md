@@ -81,6 +81,37 @@ We have implemented two versions of the Roofer Online processes API, where `v2` 
 - `v1`: A public demo that was developed for the testbed, and it uses fixture data. Live at [https://processes.staging.roofer-online.nl/ogcapi](https://processes.staging.roofer-online.nl/ogcapi).
 - `v2`: The client-facing live Roofer Online processes API, which requires a Roofer Online account and authentication. Live at  [https://roofer-online.nl/ogcapi](https://roofer-online.nl/ogcapi).
 
+### Data
+
+### Processes
+
+#### v1 - demo
+
+The public demo exposes three Roofer Online processes:
+
+| Process                           | Input                                              | Result passed to the next step              |
+|-----------------------------------|----------------------------------------------------|---------------------------------------------|
+| `roofer:validate_point_cloud:v1`  | Remote LAS/LAZ URL objects                         | Readiness report containing point-cloud IDs |
+| `roofer:reconstruct_buildings:v1` | Point-cloud IDs and a BAG selection                | Model ID and artifact links                 |
+| `roofer:convert_format:v1`        | Model ID and requested CityJSON/GeoPackage formats | Artifact links for the selected formats     |
+
+An additional `echo` process supports the OGC compliance suite.
+The proposed 3DCityDB export (`export_to_3dcitydb`) was not implemented, because it would require authentication with an external 3DCityDB service this complexity is outside the scope of the testbed.
+
+Clients can discover input/output schemas, execute synchronously or request asynchronous execution with `Prefer: respond-async`, follow the returned job URL, poll status, list jobs and retrieve
+results.
+The demo does not download the supplied point clouds or run reconstruction: it returns fixed sample files.
+Jobs and generated asset registrations are held in memory and disappear on restart.
+
+#### v2 - live Roofer Online
+
+The live v2 API exposes one process, `roofer:reconstruct_buildings:v2`, which combines point-cloud preparation, reconstruction and export. 
+Clients submit remote LAS/LAZ URLs, a BAG building or area selection, optional reconstruction settings and requested output formats in one request, instead of passing asset IDs between the three v1 processes. 
+The service downloads and processes the supplied data through Roofer Online's workflows and supports CityJSON, GeoPackage, OBJ, CityJSON with terrain and 3D Tiles outputs. 
+Execution is asynchronous only, and jobs persist across restarts. 
+Discovery remains public; execution, job monitoring, results and artefact downloads require JWT bearer-token authentication and follow Roofer Online's access rules. 
+This authenticated v2 workflow was not tested during the testbed.
+
 ### Architecture
 
 The architecture separates OGC protocol handling, Roofer Online process definitions and integration with the live service.
@@ -152,25 +183,6 @@ app.mount("/ogcapi", create_app(
 ))
 ```
 
-### Data
-
-### Processes
-
-The public demo exposes three Roofer Online processes:
-
-| Process                           | Input                                              | Result passed to the next step              |
-|-----------------------------------|----------------------------------------------------|---------------------------------------------|
-| `roofer:validate_point_cloud:v1`  | Remote LAS/LAZ URL objects                         | Readiness report containing point-cloud IDs |
-| `roofer:reconstruct_buildings:v1` | Point-cloud IDs and a BAG selection                | Model ID and artifact links                 |
-| `roofer:convert_format:v1`        | Model ID and requested CityJSON/GeoPackage formats | Artifact links for the selected formats     |
-
-An additional `echo` process supports the OGC compliance suite.
-The proposed 3DCityDB export (`export_to_3dcitydb`) was not implemented, because it would require authentication with an external 3DCityDB service this complexity is outside the scope of the testbed.
-
-Clients can discover input/output schemas, execute synchronously or request asynchronous execution with `Prefer: respond-async`, follow the returned job URL, poll status, list jobs and retrieve
-results.
-The demo does not download the supplied point clouds or run reconstruction: it returns fixed sample files.
-Jobs and generated asset registrations are held in memory and disappear on restart.
 
 ### Live API
 
