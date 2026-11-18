@@ -4,8 +4,7 @@ Geonovum DTaaS Testbed 2026 Phase 2. Adoption topic #1: Implement and validate a
 
 ## Summary
 
-3DGI added an OGC API – Processes interface to [Roofer Online](https://roofer-online.nl), which reconstructs 3D buildings from point clouds and building footprints. The contribution addresses Topic 1:
-exposing an existing calculation module through the nLDT architecture and making it usable by other vendors' clients.
+3DGI added an OGC API – Processes interface to [Roofer Online](https://roofer-online.nl), which reconstructs 3D buildings from point clouds and building footprints. The contribution addresses Topic 1: exposing an existing calculation module through the nLDT architecture and making it usable by other vendors' clients.
 
 There are two versions of the Roofer Online processes API.
 
@@ -38,8 +37,7 @@ Roofer Online has a React frontend, a FastAPI backend and a [Dagster](https://da
 The frontend uses the service's existing internal application API to manage data, start jobs, poll their status and retrieve results.
 A separate authentication handler manages user sign-in.
 The API uses bearer-token authentication with JWT tokens and checks user roles and ownership to control access to processes and assets.
-[Dagster]([Dagster](https://dagster.io)) orchestrates point-cloud preparation, BAG synchronisation, reconstruction, format conversion and database export, managing dependencies between processing
-steps.
+[Dagster]([Dagster](https://dagster.io)) orchestrates point-cloud preparation, BAG synchronisation, reconstruction, format conversion and database export, managing dependencies between processing steps.
 The backend submits jobs through Dagster's GraphQL API and stores process records with their Dagster run identifiers in PostgreSQL.
 When the frontend polls an active process, the backend queries Dagster, updates the stored process and asset statuses, and records output metadata when processing completes.
 This job lifecycle existed before the OGC API interface was added.
@@ -76,10 +74,14 @@ The Testbed proposal identified four Roofer Online capabilities to expose as OGC
 
 ## Implementation
 
-We have implemented two versions of the Roofer Online processes API, where `v2` applies the demo implementation of `v1` on the live Roofer Online service.
+The API accepts LAS/LAZ URLs, a BAG building selection and processing options as JSON, and returns metadata and download links for building models.
+We implemented two versions:
 
-- `v1`: A public demo that was developed for the testbed, and it uses fixture data. Live at [https://processes.staging.roofer-online.nl/ogcapi](https://processes.staging.roofer-online.nl/ogcapi).
-- `v2`: The client-facing live Roofer Online processes API, which requires a Roofer Online account and authentication. Live at  [https://roofer-online.nl/ogcapi](https://roofer-online.nl/ogcapi).
+- [v1 demo](https://processes.staging.roofer-online.nl/ogcapi): three processes for validation, reconstruction and conversion, using fixed sample data. This version was tested during the testbed.
+- [v2 live service](https://roofer-online.nl/ogcapi): one asynchronous process combining preparation, reconstruction and export of client data. It requires JWT bearer-token authentication and was not tested during the testbed.
+
+Both versions reuse the `ogc-processes` protocol layer. 
+The live integration adds process definitions from `roofer-processes-contracts` and adapters to Roofer Online's existing authentication, Dagster workflows and persistent job storage.
 
 ### Data
 
