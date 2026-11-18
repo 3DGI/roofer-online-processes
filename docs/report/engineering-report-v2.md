@@ -83,6 +83,26 @@ We have implemented two versions of the Roofer Online processes API, where `v2` 
 
 ### Data
 
+Clients submit inputs in the `inputs` object of a JSON body to `POST /ogcapi/processes/{processID}/execution`, with `Content-Type: application/json`.
+
+- **Point clouds:** one or more LAS/LAZ files, supplied as HTTP(S) URL objects, for example `{"kind": "url", "url": "https://data.example/survey.laz"}`. The files are hosted by the client or a data provider, their contents are not embedded in the request. The live service downloads them. Their horizontal coordinates must align with the BAG footprints in EPSG:28992, the service does not reproject them.
+- **Building selection:** BAG building identifiers (`identificatie` attribute), for example `{"kind": "buildings", "building_ids": ["0000000000000001"]}`, or a WKT Polygon/MultiPolygon with `"kind": "area"` and `"crs": "EPSG:28992"`. Roofer Online obtains the corresponding BAG footprints, clients supply the selection.
+- **Settings and formats:** optional reconstruction settings in `config`, for example `{"ceil-point-density": 10}`, and an optional model `name`. The `formats` array selects downloads: v1 supports `cityjson` and `gpkg`, v2 also supports `obj`, `cityjson_terrain` and `3dtiles`, and defaults to CityJSON.
+- **Validation results:** the v1 validation process returns a JSON readiness report with per-source readiness, CRS, bounds, point count and density. These are sample values in the demo.
+- **Model outputs:** reconstruction and conversion return JSON metadata and download links in `artifacts`, keyed by format. Each link has an `href` and media `type`, clients download the files with HTTP GET. The live v2 outputs are ZIP archives (`application/zip`), and downloads require the client's JWT bearer token. For asynchronous execution, clients retrieve the result document from `GET /ogcapi/jobs/{jobID}/results` after the job succeeds.
+
+For example, a v2 reconstruction request combines the source, selection and output formats in one JSON body. Send it to `POST /ogcapi/processes/roofer:reconstruct_buildings:v2/execution` with `Prefer: respond-async` and `Authorization: Bearer <JWT>`:
+
+```json
+{
+  "inputs": {
+    "point_clouds": [{"kind": "url", "url": "https://data.example/survey.laz"}],
+    "bag": {"kind": "buildings", "building_ids": ["0000000000000001"]},
+    "formats": ["cityjson", "gpkg"]
+  }
+}
+```
+
 ### Processes
 
 #### v1 - demo
@@ -182,9 +202,6 @@ app.mount("/ogcapi", create_app(
     store=job_store,
 ))
 ```
-
-
-### Live API
 
 ---
 
