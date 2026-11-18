@@ -34,13 +34,14 @@ The main goal of Roofer Online is to enable Dutch municipalities and provinces t
 
 The service uses the open-source [Roofer](https://innovation.3dbag.nl/roofer/) reconstruction software, and the same parameters that are used for producing the [3DBAG](https://3dbag.nl).
 
-Roofer Online has a React frontend, a FastAPI backend and a [Dagster](https://dagster.io) processing layer. 
-The frontend uses the service's existing internal application API to manage data, start jobs, poll their status and retrieve results. 
-A separate authentication handler manages user sign-in. 
+Roofer Online has a React frontend, a FastAPI backend and a [Dagster](https://dagster.io) processing layer.
+The frontend uses the service's existing internal application API to manage data, start jobs, poll their status and retrieve results.
+A separate authentication handler manages user sign-in.
 The API uses bearer-token authentication with JWT tokens and checks user roles and ownership to control access to processes and assets.
-[Dagster]([Dagster](https://dagster.io)) orchestrates point-cloud preparation, BAG synchronisation, reconstruction, format conversion and database export, managing dependencies between processing steps. 
-The backend submits jobs through Dagster's GraphQL API and stores process records with their Dagster run identifiers in PostgreSQL. 
-When the frontend polls an active process, the backend queries Dagster, updates the stored process and asset statuses, and records output metadata when processing completes. 
+[Dagster]([Dagster](https://dagster.io)) orchestrates point-cloud preparation, BAG synchronisation, reconstruction, format conversion and database export, managing dependencies between processing
+steps.
+The backend submits jobs through Dagster's GraphQL API and stores process records with their Dagster run identifiers in PostgreSQL.
+When the frontend polls an active process, the backend queries Dagster, updates the stored process and asset statuses, and records output metadata when processing completes.
 This job lifecycle existed before the OGC API interface was added.
 
 A central question for us was how to layer an OGC API – Processes interface over the existing backend API so that external clients could invoke the processes already available through the UI.
@@ -53,7 +54,7 @@ The Testbed proposal identified four Roofer Online capabilities to expose as OGC
 | `validate_point_cloud`  | Checks whether a point cloud is suitable for reconstruction, including its spatial extent, classification and density. |
 | `reconstruct_buildings` | Reconstructs 3D buildings from the selected BAG polygons and point clouds, producing CityJSON models.                  |
 | `convert_format`        | Converts CityJSON models to OBJ, GeoPackage or 3D Tiles for use in other software or publication.                      |
-| `export_to_3dcitydb`    | Exports CityJSON models to a 3DCityDB database. *The 3DCityDB export process was not implemented in the testbed.*                                                                       |
+| `export_to_3dcitydb`    | Exports CityJSON models to a 3DCityDB database. *The 3DCityDB export process was not implemented in the testbed.*      |
 
 ![Point-cloud selection showing density, classification and readiness.](images/roofer-online-01.png)
 
@@ -75,11 +76,101 @@ The Testbed proposal identified four Roofer Online capabilities to expose as OGC
 
 ## Implementation
 
+We have implemented two versions of the Roofer Online processes API, where `v2` applies the demo implementation of `v1` on the live Roofer Online service.
+
+- `v1`: A public demo that was developed for the testbed, and it uses fixture data. Live at [https://processes.staging.roofer-online.nl/ogcapi](https://processes.staging.roofer-online.nl/ogcapi).
+- `v2`: The client-facing live Roofer Online processes API, which requires a Roofer Online account and authentication. Live at  [https://roofer-online.nl/ogcapi](https://roofer-online.nl/ogcapi).
+
 ### Architecture
+
+The architecture separates OGC protocol handling, Roofer Online process definitions and integration with the live service.
+This allowed standards testing against the demo while keeping the protocol code independent of Roofer Online's database and Dagster.
+
+The `ogc-processes` package implements the following resources from [OGC API – Processes Part 1: Core](https://docs.ogc.org/is/18-062r2/18-062r2.html), plus the Job list extension.
+Paths are relative to `/ogcapi`.
+
+| Purpose                                                         | OGC resource and operation                        |
+|-----------------------------------------------------------------|---------------------------------------------------|
+| Discover available processes and their input/output definitions | `GET /processes` and `GET /processes/{processID}` |
+| Submit inputs to a process                                      | `POST /processes/{processID}/execution`           |
+| List jobs and check an execution's status                       | `GET /jobs` and `GET /jobs/{jobID}`               |
+| Retrieve the outputs of a completed job                         | `GET /jobs/{jobID}/results`                       |
+
+The package parses execution requests, selects synchronous or asynchronous execution from the `Prefer` header, and constructs responses with the required status codes, headers, links and output structure. 
+For example, an asynchronous submission returns HTTP 201 with a job description and a `Location` header pointing to the job's status URL.
+
+To connect these operations to a host application, the `create_app` FastAPI application factory receives five adapters: Python objects implementing the interfaces below. 
+This division allows us to separate the external OGC API from the internal interfaces.
+
+| Adapter                    | Responsibility                                                                                          |
+|----------------------------|---------------------------------------------------------------------------------------------------------|
+| `ProcessCatalog`           | Supplies available processes, input/output schemas and supported execution modes.                       |
+| `ProcessContractValidator` | Checks process-specific inputs before submission and backend outputs before returning them to clients.  |
+| `Authenticator`            | Resolves the caller's identity using the host's authentication mechanism.                               |
+| `ExecutionBackend`         | Submits work to the host's processing engine and retrieves execution status and outputs.                |
+| `JobStore`                 | Stores each OGC job with its owner and backend execution identifier, and retrieves jobs for that owner. |
+
+Dagster tracks workflow runs, the `JobStore` tracks the jobs exposed through the OGC API. 
+It retains a public job ID, its owner and a mapping to the backend execution.
+One OGC job can span several Dagster runs, such as point-cloud preparation followed by reconstruction, while clients follow one job and list only their own jobs.
+The execution adapter obtains processing status and results from the backend. 
+`JobStore` does not require a separate database: its implementation can use existing Roofer Online records where they provide the required information.
+The demo stores jobs in memory, the live integration persists them in PostgreSQL.
+
+Separating these responsibilities lets a host change its process definitions, authentication, workflow engine or storage without changing the HTTP implementation. 
+In the demo, the adapters use predefined sample data, simulated execution, unverified demo identities and in-memory job storage. 
+These are the “fixture adapters”: they let clients exercise the OGC interface without running against the live Roofer Online service.
+
+The `roofer-processes-contracts` package supplies the live v2 process catalogue and validator using the interfaces and response models defined by `ogc-processes`.
+Its Pydantic models define both the published input/output schemas and runtime validation rules.
+Keeping these definitions separate from the database and workflow engine lets the production contract be tested without running Roofer Online.
+
+`RooferCatalog` and `RooferContractValidator` fill the `ProcessCatalog` and `ProcessContractValidator` slots described above.
+For `roofer:reconstruct_buildings:v2`, the catalogue supplies the process description returned by `GET /processes/{processID}`.
+On an execution request, the validator checks the inputs against `ReconstructionInputs` and passes normalised values to the execution backend, invalid inputs are rejected before submission.
+When results are retrieved, it checks the backend's `building_model` output against `BuildingModel` before the OGC layer returns it to the client.
+The remaining three adapters connect this contract to Roofer Online's authentication, processing and storage.
+
+Roofer Online installs both packages and mounts the OGC application at `/ogcapi` alongside its existing API.
+It supplies adapters for JWT authentication, execution and persistent job storage.
+The execution adapter calls shared Python application services behind the existing API, reusing ownership checks, asset management and Dagster workflows.
+The job store links each public OGC job to its owner and backend execution, the execution adapter translates backend status and results into OGC responses.
+External clients can therefore submit and monitor work through the standard interface while the existing backend retains control of access and processing.
+
+Illustrative host integration, where `jwt_authenticator`, `execution_backend` and `job_store` are Roofer Online's adapters:
+
+```python
+from ogc_processes.router import create_app
+from roofer_processes_contracts.catalog import RooferCatalog, RooferContractValidator
+
+app.mount("/ogcapi", create_app(
+    catalog=RooferCatalog(),
+    validator=RooferContractValidator(),
+    authenticator=jwt_authenticator,
+    backend=execution_backend,
+    store=job_store,
+))
+```
 
 ### Data
 
 ### Processes
+
+The public demo exposes three Roofer Online processes:
+
+| Process                           | Input                                              | Result passed to the next step              |
+|-----------------------------------|----------------------------------------------------|---------------------------------------------|
+| `roofer:validate_point_cloud:v1`  | Remote LAS/LAZ URL objects                         | Readiness report containing point-cloud IDs |
+| `roofer:reconstruct_buildings:v1` | Point-cloud IDs and a BAG selection                | Model ID and artifact links                 |
+| `roofer:convert_format:v1`        | Model ID and requested CityJSON/GeoPackage formats | Artifact links for the selected formats     |
+
+An additional `echo` process supports the OGC compliance suite.
+The proposed 3DCityDB export (`export_to_3dcitydb`) was not implemented, because it would require authentication with an external 3DCityDB service this complexity is outside the scope of the testbed.
+
+Clients can discover input/output schemas, execute synchronously or request asynchronous execution with `Prefer: respond-async`, follow the returned job URL, poll status, list jobs and retrieve
+results.
+The demo does not download the supplied point clouds or run reconstruction: it returns fixed sample files.
+Jobs and generated asset registrations are held in memory and disappear on restart.
 
 ### Live API
 
