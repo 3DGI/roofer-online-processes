@@ -219,6 +219,28 @@ We judged the required protocol surface: discovery, execution, job monitoring an
 
 ## Conformance
 
+Conformance was tested on the v1 demo API.
+
+### `ogc-checker`
+
+We ran `@geonovum/ogc-checker` **1.3.1** as a local package, using the ruleset for the `ogc-api-processes` **2.0.0**:
+
+```sh
+npm exec -- ogc-checker validate \
+  --standard ogc-api-processes --version 2.0.0 \
+  --input "https://processes.staging.roofer-online.nl/ogcapi/openapi.json" \
+  --fail-on warn
+```
+
+The run returned:
+
+```
+Ruleset: ogc-api-processes@2.0.0
+Applied rulesets: http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/core, http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/job-list, http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/json, http://www.opengis.net/spec/ogcapi-processes-1/2.0/conf/ogc-process-description
+Diagnostics: 0 (errors 0, warnings 0, info 0, hints 0)
+No diagnostics.
+```
+
 ---
 
 ## Interoperability with other participants
