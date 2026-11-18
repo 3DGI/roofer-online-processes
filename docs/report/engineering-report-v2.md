@@ -70,7 +70,6 @@ The Testbed proposal identified four Roofer Online capabilities to expose as OGC
 
 *Figure 4. Access completed models and choose a download or export format.*
 
----
 
 ## Implementation
 
@@ -215,13 +214,12 @@ The same interfaces connect both versions without coupling the OGC implementatio
 We chose our own adapter interfaces because they directly express the separation we needed, while allowing the OGC routes to call the application services behind our existing FastAPI API and reuse its authentication and ownership rules.
 We judged the required protocol surface: discovery, execution, job monitoring and results, are manageable to implement.
 
----
 
 ## Conformance
 
 Conformance was tested on the v1 demo API.
 
-### `ogc-checker`
+### ogc-checker
 
 We ran `@geonovum/ogc-checker` **1.3.1** as a local package, using the ruleset for the `ogc-api-processes` **2.0.0**:
 
@@ -258,17 +256,15 @@ The runner treats failed or skipped tests as a failure. The run completed with *
 OGC API - Processes ETS passed all 54 tests without skips. Report: artifacts/ogc-processes-ets.xml
 ```
 
----
-
-## Interoperability with other participants
-
-### Future Insight
-
-### IMAGEM
-
-### Breinstein
-
----
-
 ## Findings
+
+- **An OGC interface can reuse an existing service backend.** Roofer Online exposes its processing through standard endpoints while retaining its FastAPI application services, JWT authentication, ownership checks and Dagster workflows.
+ 
+- **The protocol implementation was reused across different process interfaces.** The v1 demo and live v2 service share HTTP handling and OGC response construction while supplying different process definitions and backend adapters. Testing v1 exercised the shared protocol code, but it did not validate v2’s OGC-conformance or authenticated workflow.
+ 
+- **A public process need not correspond to one internal workflow step.** The v1 demo exposes validation, reconstruction and conversion separately. The live v2 process combines these steps, allowing clients to submit source data and requested outputs without managing intermediate assets.
+ 
+- **OGC jobs need a stable identity across backend workflows.** One client request can involve several Dagster runs. The job store maintains the public job identifier, ownership and execution mapping so clients can monitor the operation as one job.
+ 
+- **Authenticated interoperability remains to be tested.** The live v2 API was excluded from testbed testing because it requires authentication. Further testing should cover authenticated submission, polling and downloads with participant clients and real input data.
 
