@@ -241,6 +241,23 @@ Diagnostics: 0 (errors 0, warnings 0, info 0, hints 0)
 No diagnostics.
 ```
 
+### OGC TEAM Engine
+
+We used **TEAM Engine 6.0.0-RC2** with version **1.3** of the OGC API – Processes Executable Test Suite (ETS), packaged in the Docker image `ogccite/ets-ogcapi-processes10:1.3-teamengine-6.0.0-RC2`.
+The compliance profile is **OGC API – Processes – Part 1: Core, version 1.0.0 (OGC 18-062r2)**, exposed as suite `ogcapi-processes-1.0` ([suite documentation](https://cite.opengeospatial.org/teamengine/about/ogcapi-processes-1.0/1.0/site/)).
+
+We run TEAM Engine in a local container and start validation through its REST API with a GET request to `/teamengine/rest/suites/ogcapi-processes-1.0/run`, using these parameters:
+
+- `iut=https://processes.staging.roofer-online.nl/ogcapi`: the deployed v1 demo API under test.
+- `echoprocessid=echo`: the process used for execution tests.
+
+No additional test-selection parameters are supplied.
+The runner treats failed or skipped tests as a failure. The run completed with **54 passed, 0 failed and 0 skipped**:
+
+```text
+OGC API - Processes ETS passed all 54 tests without skips. Report: artifacts/ogc-processes-ets.xml
+```
+
 ---
 
 ## Interoperability with other participants
