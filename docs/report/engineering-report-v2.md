@@ -87,7 +87,7 @@ The live integration adds process definitions from `roofer-processes-contracts` 
 
 Clients submit inputs in the `inputs` object of a JSON body to `POST /ogcapi/processes/{processID}/execution`, with `Content-Type: application/json`.
 
-- **Point clouds:** one or more LAS/LAZ files, supplied as HTTP(S) URL objects, for example `{"kind": "url", "url": "https://data.example/survey.laz"}`. The files are hosted by the client or a data provider, their contents are not embedded in the request. The live service downloads them. Their horizontal coordinates must align with the BAG footprints in EPSG:28992, the service does not reproject them.
+- **Point clouds:** one or more LAS/LAZ files, supplied as HTTP(S) URL objects, for example `{"kind": "url", "url": "https://data.example/survey.laz"}`. The files are hosted by the client or a data provider, their contents are not embedded in the request, because point cloud data is usually very large. The live service downloads the data from the provided URLs. Their horizontal coordinates must align with the BAG footprints in EPSG:28992, the service does not reproject them.
 - **Building selection:** BAG building identifiers (`identificatie` attribute), for example `{"kind": "buildings", "building_ids": ["0000000000000001"]}`, or a WKT Polygon/MultiPolygon with `"kind": "area"` and `"crs": "EPSG:28992"`. Roofer Online obtains the corresponding BAG footprints, clients supply the selection.
 - **Settings and formats:** optional reconstruction settings in `config`, for example `{"ceil-point-density": 10}`, and an optional model `name`. The `formats` array selects downloads: v1 supports `cityjson` and `gpkg`, v2 also supports `obj`, `cityjson_terrain` and `3dtiles`, and defaults to CityJSON.
 - **Validation results:** the v1 validation process returns a JSON readiness report with per-source readiness, CRS, bounds, point count and density. These are sample values in the demo.
@@ -204,6 +204,16 @@ app.mount("/ogcapi", create_app(
     store=job_store,
 ))
 ```
+
+### Why not pygeoapi?
+
+We wanted to separate OGC protocol handling from process definitions and the host application's authentication, storage and orchestration.
+This let us test the protocol layer with demo adapters, then reuse it with the live process contracts and Roofer Online's existing services.
+The same interfaces connect both versions without coupling the OGC implementation to Dagster or Roofer Online's database.
+
+[pygeoapi supports custom process plugins and replaceable job managers](https://docs.pygeoapi.io/en/stable/publishing/ogcapi-processes.html), so a Dagster integration would also be possible.
+We chose our own adapter interfaces because they directly express the separation we needed, while allowing the OGC routes to call the application services behind our existing FastAPI API and reuse its authentication and ownership rules.
+We judged the required protocol surface: discovery, execution, job monitoring and results, are manageable to implement.
 
 ---
 
